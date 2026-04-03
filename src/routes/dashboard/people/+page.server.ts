@@ -9,6 +9,24 @@ function readValue(formData: FormData, key: string) {
     return value ? value : undefined;
 }
 
+function getDatabaseErrorMessage(reason: unknown) {
+    const message = reason instanceof Error ? reason.message : String(reason);
+
+    if (/FOREIGN KEY constraint failed/i.test(message)) {
+        return 'The selected user ID does not exist.';
+    }
+
+    if (/NOT NULL constraint failed/i.test(message)) {
+        return 'Please fill in all required fields.';
+    }
+
+    if (/UNIQUE constraint failed/i.test(message)) {
+        return 'A person with the same value already exists.';
+    }
+
+    return 'Something went wrong while saving the person. Please try again.';
+}
+
 export const load = async ({ locals, url }) => {
     if (locals.person?.role !== 'admin') {
         throw error(403, 'Forbidden');
@@ -39,14 +57,18 @@ export const actions = {
             return fail(400, { message: 'Role is required.' });
         }
 
-        await db.insert(people).values({
-            name: readValue(formData, 'name'),
-            fullname: readValue(formData, 'fullname'),
-            email: readValue(formData, 'email'),
-            role: role as (typeof ROLES)[number],
-            userId: readValue(formData, 'userId'),
-            updatedBy: locals.person?.id
-        });
+        try {
+            await db.insert(people).values({
+                name: readValue(formData, 'name'),
+                fullname: readValue(formData, 'fullname'),
+                email: readValue(formData, 'email'),
+                role: role as (typeof ROLES)[number],
+                userId: readValue(formData, 'userId'),
+                updatedBy: locals.person?.id
+            });
+        } catch (reason) {
+            return fail(500, { message: getDatabaseErrorMessage(reason) });
+        }
 
         throw redirect(303, '/dashboard/people');
     },
@@ -66,15 +88,19 @@ export const actions = {
             return fail(400, { message: 'Role is required.' });
         }
 
-        await db.update(people).set({
-            name: readValue(formData, 'name'),
-            fullname: readValue(formData, 'fullname'),
-            email: readValue(formData, 'email'),
-            role: role as (typeof ROLES)[number],
-            userId: readValue(formData, 'userId'),
-            updatedBy: locals.person?.id,
-            updatedAt: new Date()
-        }).where(eq(people.id, id));
+        try {
+            await db.update(people).set({
+                name: readValue(formData, 'name'),
+                fullname: readValue(formData, 'fullname'),
+                email: readValue(formData, 'email'),
+                role: role as (typeof ROLES)[number],
+                userId: readValue(formData, 'userId'),
+                updatedBy: locals.person?.id,
+                updatedAt: new Date()
+            }).where(eq(people.id, id));
+        } catch (reason) {
+            return fail(500, { message: getDatabaseErrorMessage(reason) });
+        }
 
         throw redirect(303, '/dashboard/people');
     },
@@ -89,7 +115,11 @@ export const actions = {
             return fail(400, { message: 'Missing person id.' });
         }
 
-        await db.delete(people).where(eq(people.id, id));
+        try {
+            await db.delete(people).where(eq(people.id, id));
+        } catch (reason) {
+            return fail(500, { message: getDatabaseErrorMessage(reason) });
+        }
         throw redirect(303, '/dashboard/people');
     }
 };
