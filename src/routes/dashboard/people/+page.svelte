@@ -49,7 +49,7 @@
                     >
                 </div>
                 {#if form?.message}
-                    <div class="alert alert-danger">{form.message}</div>
+                    <div class="alert alert-danger" role="alert">{form.message}</div>
                 {/if}
                 <div class="table-responsive">
                     <table class="table table-striped align-middle mb-0">
@@ -154,6 +154,11 @@
                     ></button>
                 </div>
                 <div class="modal-body">
+                    {#if form?.message}
+                        <div class="alert alert-danger" role="alert">
+                            {form.message}
+                        </div>
+                    {/if}
                     <div class="row g-3">
                         <div class="col-md-4">
                             <label class="form-label" for="name">Name</label>
@@ -237,6 +242,11 @@
                     ></button>
                 </div>
                 <div class="modal-body">
+                    {#if form?.message}
+                        <div class="alert alert-danger" role="alert">
+                            {form.message}
+                        </div>
+                    {/if}
                     <div class="row g-3">
                         <div class="col-md-4">
                             <label class="form-label" for="edit-name"
