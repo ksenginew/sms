@@ -1,11 +1,10 @@
 import { error, fail, redirect } from '@sveltejs/kit';
-import { desc, eq } from 'drizzle-orm';
+import { desc, eq, like, or, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { ROLES, people } from '$lib/server/db/schema';
-import { admin } from 'better-auth/plugins/admin';
 
-function readValue(formData: FormData, key: string) {
-    const value = formData.get(key)?.toString().trim();
+function readValue(data: FormData | URLSearchParams, key: string) {
+    const value = data.get(key)?.toString().trim();
     return value ? value : undefined;
 }
 
@@ -27,21 +26,65 @@ function getDatabaseErrorMessage(reason: unknown) {
     return 'Something went wrong while saving the person. Please try again.';
 }
 
+function readIntParam(value: string | null, fallback: number) {
+    if (!value) return fallback;
+    const parsed = Number.parseInt(value, 10);
+    return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function buildSearchWhere(search: string | undefined) {
+    if (!search) return undefined;
+
+    const pattern = `%${search}%`;
+    return or(
+        like(people.id, pattern),
+        like(people.name, pattern),
+        like(people.fullname, pattern),
+        like(people.firstName, pattern),
+        like(people.lastName, pattern),
+        like(people.email, pattern),
+        like(people.idnumber, pattern),
+        like(people.phone, pattern),
+        like(people.mobilePhone, pattern),
+        like(people.address, pattern),
+        like(people.userId, pattern),
+        like(people.role, pattern)
+    );
+}
+
 export const load = async ({ locals, url }) => {
     if (locals.person?.role !== 'admin') {
         throw error(403, 'Forbidden');
     }
 
-    const [rows, editingPerson] = await Promise.all([
-        db.select().from(people).orderBy(desc(people.createdAt)),
+    const search = readValue(url.searchParams, 'search');
+    const limit = Math.max(1, Math.min(100, readIntParam(url.searchParams.get('limit'), 20)));
+    const offset = Math.max(0, readIntParam(url.searchParams.get('offset'), 0));
+    const whereClause = buildSearchWhere(search);
+
+    const [rows, totalRows, editingPerson] = await Promise.all([
+        db.select().from(people).where(whereClause).orderBy(desc(people.createdAt)).limit(limit).offset(offset),
+        db.select({ count: sql<number>`count(*)` }).from(people).where(whereClause).get(),
         url.searchParams.get('edit')
             ? db.select().from(people).where(eq(people.id, url.searchParams.get('edit')!)).limit(1).get()
             : Promise.resolve(null)
     ]);
 
+    const total = Number(totalRows?.count ?? 0);
+    const hasPrevious = offset > 0;
+    const hasNext = offset + rows.length < total;
+
     return {
         people: rows,
-        editingPerson
+        editingPerson,
+        search: search ?? '',
+        limit,
+        offset,
+        total,
+        hasPrevious,
+        hasNext,
+        previousOffset: Math.max(0, offset - limit),
+        nextOffset: offset + limit
     };
 };
 
@@ -61,7 +104,13 @@ export const actions = {
             await db.insert(people).values({
                 name: readValue(formData, 'name'),
                 fullname: readValue(formData, 'fullname'),
+                firstName: readValue(formData, 'firstName'),
+                lastName: readValue(formData, 'lastName'),
                 email: readValue(formData, 'email'),
+                idnumber: readValue(formData, 'idnumber'),
+                phone: readValue(formData, 'phone'),
+                mobilePhone: readValue(formData, 'mobilePhone'),
+                address: readValue(formData, 'address'),
                 role: role as (typeof ROLES)[number],
                 userId: readValue(formData, 'userId'),
                 updatedBy: locals.person?.id
@@ -92,7 +141,13 @@ export const actions = {
             await db.update(people).set({
                 name: readValue(formData, 'name'),
                 fullname: readValue(formData, 'fullname'),
+                firstName: readValue(formData, 'firstName'),
+                lastName: readValue(formData, 'lastName'),
                 email: readValue(formData, 'email'),
+                idnumber: readValue(formData, 'idnumber'),
+                phone: readValue(formData, 'phone'),
+                mobilePhone: readValue(formData, 'mobilePhone'),
+                address: readValue(formData, 'address'),
                 role: role as (typeof ROLES)[number],
                 userId: readValue(formData, 'userId'),
                 updatedBy: locals.person?.id,

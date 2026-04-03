@@ -18,7 +18,7 @@
 				return;
 			}
 
-			await goto('/dashboard/signin');
+			await goto('/auth/signin');
 		} catch (error) {
 			message = error instanceof Error ? error.message : 'Unable to sign out.';
 		} finally {

@@ -53,7 +53,7 @@
 						<div class="text-center mb-4">
 							<p class="text-uppercase text-secondary small fw-semibold mb-2">Eduscend LMS</p>
 							<h1 class="h4 fw-bold mb-2">Welcome back</h1>
-                            <p class="text-body-secondary small mb-0">Sign in to your account to continue</p>
+							<p class="text-body-secondary small mb-0">Sign in to your account to continue</p>
 						</div>
 
 						{#if message}
@@ -104,7 +104,11 @@
 
 						<p class="text-center text-body-secondary small mt-4 mb-0">
 							Need an account?
-							<a class="fw-semibold text-decoration-none" href="/dashboard/signup">Create one</a>
+							<a class="fw-semibold text-decoration-none" href="/auth/signup">Create one</a>
+						</p>
+
+						<p class="text-center small mt-2 mb-0">
+							<a class="fw-semibold text-decoration-none" href="/auth/reset-password">Forgot password?</a>
 						</p>
 					</div>
 				</div>

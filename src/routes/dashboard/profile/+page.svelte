@@ -1,185 +1,163 @@
-<!-- <script lang="ts">
-	let { data } = $props();
+<script lang="ts">
+	let { data, form } = $props();
+
+	function providerLabel(providerId: string | null | undefined) {
+		if (!providerId) return "Unknown";
+		return providerId.charAt(0).toUpperCase() + providerId.slice(1);
+	}
 
 	function formatDate(value: unknown) {
-		if (!value) return '-';
-
+		if (!value) return "-";
 		const date = value instanceof Date ? value : new Date(String(value));
-		if (Number.isNaN(date.getTime())) return '-';
-
-		return date.toLocaleString();
+		if (Number.isNaN(date.getTime())) return "-";
+		return date.toLocaleDateString();
 	}
+
 </script>
 
-<div class="row g-3">
-	<div class="col-12">
-		<div class="card">
-			<div class="card-body">
-				<h2 class="h6 mb-3">Profile</h2>
-				<div class="table-responsive">
-					<table class="table mb-0">
-						<tbody>
-							<tr>
-								<th scope="row">Person ID</th>
-								<td class="text-break">{data.person?.id ?? '-'}</td>
-							</tr>
-							<tr>
-								<th scope="row">Role</th>
-								<td>{data.person?.role ?? '-'}</td>
-							</tr>
-							<tr>
-								<th scope="row">Name</th>
-								<td>{data.person?.name ?? '-'}</td>
-							</tr>
-							<tr>
-								<th scope="row">Full name</th>
-								<td>{data.person?.fullname ?? '-'}</td>
-							</tr>
-							<tr>
-								<th scope="row">Email</th>
-								<td>{data.person?.email ?? data.user?.email ?? '-'}</td>
-							</tr>
-							<tr>
-								<th scope="row">Auth User ID</th>
-								<td class="text-break">{data.user?.id ?? '-'}</td>
-							</tr>
-							<tr>
-								<th scope="row">Linked User ID</th>
-								<td class="text-break">{data.person?.userId ?? '-'}</td>
-							</tr>
-							<tr>
-								<th scope="row">Created</th>
-								<td>{formatDate(data.person?.createdAt)}</td>
-							</tr>
-							<tr>
-								<th scope="row">Updated</th>
-								<td>{formatDate(data.person?.updatedAt)}</td>
-							</tr>
-						</tbody>
-					</table>
-				</div>
+<div class="d-flex justify-content-between align-items-center mb-3">
+	<h2 class="mb-0">Profile</h2>
+</div>
+
+{#if form?.message}
+	<div class="alert {form?.success ? 'alert-success' : 'alert-danger'}" role="alert">
+		{form.message}
+	</div>
+{/if}
+
+<div class="row g-4">
+	<div class="col-12 col-lg-4">
+		<div class="card h-100">
+			<div class="card-header">Account Overview</div>
+			<div class="card-body text-center">
+				<img
+					src={
+						data.person?.image ??
+						data.user?.image ??
+						"https://placehold.co/160x160?text=User"
+					}
+					alt="Profile"
+					class="rounded-circle img-thumbnail mb-3 d-inline-block"
+					width="160"
+					height="160"
+				/>
+				<h3 class="h5">{data.person?.name ?? data.user?.name ?? "No name set"}</h3>
+				<p class="text-body-secondary">
+					{data.person?.email ?? data.user?.email ?? "No email set"}
+				</p>
+				<hr />
+				<dl class="row mb-0 text-start">
+					<dt class="col-5">User ID</dt>
+					<dd class="col-7 text-break">{data.user?.id}</dd>
+					<dt class="col-5">Joined</dt>
+					<dd class="col-7">{formatDate(data.user?.createdAt)}</dd>
+					<dt class="col-5">Linked</dt>
+					<dd class="col-7">{data.accounts?.length ?? 0} providers</dd>
+				</dl>
 			</div>
 		</div>
 	</div>
-</div> -->
 
-<script lang="ts">
-    let { data } = $props();
+	<div class="col-12 col-lg-8">
+		<div class="card">
+			<div class="card-header">Update Profile</div>
+			<div class="card-body">
+				<form method="POST" action="?/updateProfile">
+					<div class="row g-3">
+						<div class="col-md-6">
+							<label class="form-label" for="name">Name</label>
+							<input
+								id="name"
+								name="name"
+								class="form-control"
+								value={data.person?.name ?? data.user?.name ?? ""}
+								required
+							/>
+						</div>
 
-    function formatDate(value: unknown) {
-        if (!value) return '-';
-        const date = value instanceof Date ? value : new Date(String(value));
-        if (Number.isNaN(date.getTime())) return '-';
-        return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-    }
+						<div class="col-md-6">
+							<label class="form-label" for="email">Email</label>
+							<input
+								id="email"
+								name="email"
+								type="email"
+								class="form-control"
+								value={data.person?.email ?? data.user?.email ?? ""}
+								required
+							/>
+						</div>
 
-    function getInitials(name: string | null | undefined) {
-        if (!name) return '?';
-        return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
-    }
-</script>
+						<div class="col-12">
+							<button type="submit" class="btn btn-primary">
+								Save changes
+							</button>
+						</div>
+					</div>
+				</form>
 
-<div class="container py-4">
+				<hr />
 
-    <!-- Avatar + Name -->
-    <div class="text-center mb-4">
-        <div class="rounded-circle bg-primary d-inline-flex align-items-center
-            justify-content-center text-white fw-bold mb-3"
-            style="width:80px;height:80px;font-size:1.8rem">
-            {getInitials(data.person?.name)}
-        </div>
-        <h1 class="fs-4 fw-bold mb-0">{data.person?.name ?? '-'}</h1>
-        {#if data.person?.fullname}
-            <p class="text-muted small mb-0">{data.person.fullname}</p>
-        {/if}
-        {#if data.person?.role}
-            <span class="badge bg-primary mt-2">{data.person.role}</span>
-        {/if}
-    </div>
+				<form method="POST" action="?/uploadImage" enctype="multipart/form-data">
+					<div class="row g-3">
+						<div class="col-12">
+							<label class="form-label" for="image">Profile image</label>
+							<input
+								id="image"
+								name="image"
+								type="file"
+								class="form-control"
+								accept="image/png,image/jpeg,image/gif"
+								required
+							/>
+						</div>
+						<div class="col-12">
+							<button type="submit" class="btn btn-outline-primary">
+								Upload image
+							</button>
+						</div>
+					</div>
+				</form>
+			</div>
+		</div>
+	</div>
 
-    <!-- Contact info -->
-    <div class="card mb-3">
-        <div class="card-body">
-            <h2 class="fs-6 fw-semibold text-muted text-uppercase mb-3"
-                style="letter-spacing:0.08em;font-size:0.72rem!important">
-                Contact
-            </h2>
-            <div class="d-flex align-items-center gap-3 py-2 border-bottom">
-                <span class="text-muted" style="width:20px">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                        <path d="M0 4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2zm2-1a1 1 0 0 0-1 1v.217l7 4.2 7-4.2V4a1 1 0 0 0-1-1zm13 2.383-4.708 2.825L15 11.105zm-.034 6.876-5.64-3.471L8 9.583l-1.326-.795-5.64 3.47A1 1 0 0 0 2 13h12a1 1 0 0 0 .966-.741M1 11.105l4.708-2.897L1 5.383z"/>
-                    </svg>
-                </span>
-                <div>
-                    <div class="small text-muted">Email</div>
-                    <div class="fw-medium">{data.person?.email ?? data.user?.email ?? '-'}</div>
-                </div>
-            </div>
-            <div class="d-flex align-items-center gap-3 py-2">
-                <span class="text-muted" style="width:20px">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                        <path d="M3 14s-1 0-1-1 1-4 6-4 6 3 6 4-1 1-1 1zm5-6a3 3 0 1 0 0-6 3 3 0 0 0 0 6"/>
-                    </svg>
-                </span>
-                <div>
-                    <div class="small text-muted">Role</div>
-                    <div class="fw-medium text-capitalize">{data.person?.role ?? '-'}</div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Account info -->
-    <div class="card mb-3">
-        <div class="card-body">
-            <h2 class="fs-6 fw-semibold text-muted text-uppercase mb-3"
-                style="letter-spacing:0.08em;font-size:0.72rem!important">
-                Account
-            </h2>
-            <div class="py-2 border-bottom">
-                <div class="small text-muted mb-1">Person ID</div>
-                <div class="fw-medium text-break small font-monospace">{data.person?.id ?? '-'}</div>
-            </div>
-            <div class="py-2 border-bottom">
-                <div class="small text-muted mb-1">Auth User ID</div>
-                <div class="fw-medium text-break small font-monospace">{data.user?.id ?? '-'}</div>
-            </div>
-            <div class="py-2 border-bottom">
-                <div class="small text-muted mb-1">Linked User ID</div>
-                <div class="fw-medium text-break small font-monospace">{data.person?.userId ?? '-'}</div>
-            </div>
-            <div class="py-2 border-bottom">
-                <div class="small text-muted mb-1">Member since</div>
-                <div class="fw-medium">{formatDate(data.person?.createdAt)}</div>
-            </div>
-            <div class="py-2">
-                <div class="small text-muted mb-1">Last updated</div>
-                <div class="fw-medium">{formatDate(data.person?.updatedAt)}</div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Classes -->
-    {#if data.classesPreview && data.classesPreview.length > 0}
-        <div class="card mb-3">
-            <div class="card-body">
-                <h2 class="fs-6 fw-semibold text-muted text-uppercase mb-3"
-                    style="letter-spacing:0.08em;font-size:0.72rem!important">
-                    My Classes
-                </h2>
-                <div class="row row-cols-2 g-2">
-                    {#each data.classesPreview as cls}
-                        <div class="col">
-                            <a href={`/dashboard/class/${cls.id}`} class="text-decoration-none">
-                                <div class="card text-center py-3 h-100">
-                                    <div class="fw-bold">{cls.title}</div>
-                                </div>
-                            </a>
-                        </div>
-                    {/each}
-                </div>
-            </div>
-        </div>
-    {/if}
-
+	<div class="col-12">
+		<div class="card">
+			<div class="card-header">Linked Providers</div>
+			<div class="card-body">
+				{#if data.accounts?.length}
+					<div class="table-responsive">
+						<table class="table align-middle mb-0">
+							<thead>
+								<tr>
+									<th scope="col">Provider</th>
+									<th scope="col">Provider Account ID</th>
+									<th scope="col">Created</th>
+								</tr>
+							</thead>
+							<tbody>
+								{#each data.accounts as linked}
+									<tr>
+										<td>
+											<span class="badge text-bg-light border">
+												{providerLabel(linked.providerId)}
+											</span>
+										</td>
+										<td class="text-break">
+											{linked.accountId || "-"}
+										</td>
+										<td>{formatDate(linked.createdAt)}</td>
+									</tr>
+								{/each}
+							</tbody>
+						</table>
+					</div>
+				{:else}
+					<div class="alert alert-info mb-0" role="alert">
+						No linked providers found.
+					</div>
+				{/if}
+			</div>
+		</div>
+	</div>
 </div>
