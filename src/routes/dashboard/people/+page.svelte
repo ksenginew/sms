@@ -32,104 +32,84 @@
     });
 </script>
 
-<div class="row g-4">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-body">
-                <div
-                    class="d-flex justify-content-between align-items-center mb-3"
-                >
-                    <h2 class="h6 mb-0">People</h2>
-                    <button
-                        class="btn btn-primary"
-                        type="button"
-                        data-bs-toggle="modal"
-                        data-bs-target="#createPersonModal"
-                        >Create person</button
-                    >
-                </div>
-                {#if form?.message}
-                    <div class="alert alert-danger">{form.message}</div>
-                {/if}
-                <div class="table-responsive">
-                    <table class="table table-striped align-middle mb-0">
-                        <thead>
-                            <tr>
-                                <th scope="col">Person ID</th>
-                                <th scope="col">Name</th>
-                                <th scope="col">Full name</th>
-                                <th scope="col">Email</th>
-                                <th scope="col">Role</th>
-                                <th scope="col">User ID</th>
-                                <th scope="col">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {#each data.people as person}
-                                <tr>
-                                    <td>
-                                        <button
-                                            class="btn btn-sm btn-outline-secondary"
-                                            type="button"
-                                            onclick={() =>
-                                                copyPersonId(person.id)}
-                                        >
-                                            {copiedId === person.id
-                                                ? "Copied"
-                                                : "Copy ID"}
-                                        </button>
-                                    </td>
-                                    <td>{person.name ?? ""}</td>
-                                    <td>{person.fullname ?? ""}</td>
-                                    <td>{person.email ?? ""}</td>
-                                    <td>{person.role}</td>
-                                    <td class="text-break"
-                                        >{person.userId ?? ""}</td
-                                    >
-                                    <td>
-                                        <div class="d-flex gap-2">
-                                            <a
-                                                class="btn btn-sm btn-outline-secondary"
-                                                href={`/dashboard/people?edit=${person.id}`}
-                                                onclick={() => {
-                                                    data.editingPerson = person;
-                                                    editModal?.show();
-                                                }}>Edit</a
-                                            >
-                                            <form
-                                                method="POST"
-                                                action="?/delete"
-                                                onsubmit={(event) => {
-                                                    event.preventDefault();
-                                                    if (
-                                                        confirm(
-                                                            "Delete this person?",
-                                                        )
-                                                    ) {
-                                                        event.currentTarget.submit();
-                                                    }
-                                                }}
-                                            >
-                                                <input
-                                                    type="hidden"
-                                                    name="id"
-                                                    value={person.id}
-                                                />
-                                                <button
-                                                    class="btn btn-sm btn-outline-danger"
-                                                    type="submit">Delete</button
-                                                >
-                                            </form>
-                                        </div>
-                                    </td>
-                                </tr>
-                            {/each}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2>People</h2>
+    <button
+        class="btn btn-primary"
+        type="button"
+        data-bs-toggle="modal"
+        data-bs-target="#createPersonModal">Create person</button
+    >
+</div>
+{#if form?.message}
+    <div class="alert alert-danger">{form.message}</div>
+{/if}
+<div class="table-responsive">
+    <table class="table table-striped align-middle mb-0">
+        <thead>
+            <tr>
+                <th scope="col">Person ID</th>
+                <th scope="col">Name</th>
+                <th scope="col">Full name</th>
+                <th scope="col">Email</th>
+                <th scope="col">Role</th>
+                <th scope="col">User ID</th>
+                <th scope="col">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {#each data.people as person}
+                <tr>
+                    <td>
+                        <button
+                            class="btn btn-sm btn-outline-secondary"
+                            type="button"
+                            onclick={() => copyPersonId(person.id)}
+                        >
+                            {copiedId === person.id ? "Copied" : "Copy ID"}
+                        </button>
+                    </td>
+                    <td>{person.name ?? ""}</td>
+                    <td>{person.fullname ?? ""}</td>
+                    <td>{person.email ?? ""}</td>
+                    <td>{person.role}</td>
+                    <td class="text-break">{person.userId ?? ""}</td>
+                    <td>
+                        <div class="d-flex gap-2">
+                            <a
+                                class="btn btn-sm btn-outline-secondary"
+                                href={`/dashboard/people?edit=${person.id}`}
+                                onclick={() => {
+                                    data.editingPerson = person;
+                                    editModal?.show();
+                                }}>Edit</a
+                            >
+                            <form
+                                method="POST"
+                                action="?/delete"
+                                onsubmit={(event) => {
+                                    event.preventDefault();
+                                    if (confirm("Delete this person?")) {
+                                        event.currentTarget.submit();
+                                    }
+                                }}
+                            >
+                                <input
+                                    type="hidden"
+                                    name="id"
+                                    value={person.id}
+                                />
+                                <button
+                                    class="btn btn-sm btn-outline-danger"
+                                    type="submit">Delete</button
+                                >
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+            {/each}
+        </tbody>
+    </table>
 </div>
 
 <div
