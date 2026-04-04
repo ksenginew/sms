@@ -32,35 +32,15 @@ function readIntParam(value: string | null, fallback: number) {
     return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-function buildSearchWhere(search: string | undefined) {
-    if (!search) return undefined;
-
-    const pattern = `%${search}%`;
-    return or(
-        like(people.id, pattern),
-        like(people.name, pattern),
-        like(people.fullname, pattern),
-        like(people.firstName, pattern),
-        like(people.lastName, pattern),
-        like(people.email, pattern),
-        like(people.idnumber, pattern),
-        like(people.phone, pattern),
-        like(people.mobilePhone, pattern),
-        like(people.address, pattern),
-        like(people.userId, pattern),
-        like(people.role, pattern)
-    );
-}
-
 export const load = async ({ locals, url }) => {
     if (locals.person?.role !== 'admin') {
         throw error(403, 'Forbidden');
     }
 
-    const search = readValue(url.searchParams, 'search');
+    const search = readValue(url.searchParams, 'search')?.trim()
     const limit = Math.max(1, Math.min(100, readIntParam(url.searchParams.get('limit'), 20)));
     const offset = Math.max(0, readIntParam(url.searchParams.get('offset'), 0));
-    const whereClause = buildSearchWhere(search);
+    const whereClause = search ? sql`rowid IN (SELECT rowid FROM people_fts WHERE people_fts MATCH ${search} ORDER BY rank)` : undefined;
 
     const [rows, totalRows, editingPerson] = await Promise.all([
         db.select().from(people).where(whereClause).orderBy(desc(people.createdAt)).limit(limit).offset(offset),
@@ -103,9 +83,6 @@ export const actions = {
         try {
             await db.insert(people).values({
                 name: readValue(formData, 'name'),
-                fullname: readValue(formData, 'fullname'),
-                firstName: readValue(formData, 'firstName'),
-                lastName: readValue(formData, 'lastName'),
                 email: readValue(formData, 'email'),
                 idnumber: readValue(formData, 'idnumber'),
                 phone: readValue(formData, 'phone'),
@@ -140,9 +117,6 @@ export const actions = {
         try {
             await db.update(people).set({
                 name: readValue(formData, 'name'),
-                fullname: readValue(formData, 'fullname'),
-                firstName: readValue(formData, 'firstName'),
-                lastName: readValue(formData, 'lastName'),
                 email: readValue(formData, 'email'),
                 idnumber: readValue(formData, 'idnumber'),
                 phone: readValue(formData, 'phone'),

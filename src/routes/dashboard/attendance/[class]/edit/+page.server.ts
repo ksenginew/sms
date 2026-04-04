@@ -1,7 +1,7 @@
 import { error, fail } from '@sveltejs/kit';
 import { eq, inArray, and } from 'drizzle-orm';
 import { db } from '$lib/server/db';
-import { attendance, classes, classPerson, people } from '$lib/server/db/schema';
+import { attendance, attendanceSessions, classes, classPerson, people } from '$lib/server/db/schema';
 
 function formatDateLabel(value: string) {
     const date = new Date(`${value}T00:00:00`);
@@ -10,6 +10,16 @@ function formatDateLabel(value: string) {
         month: 'short',
         year: 'numeric'
     }).format(date);
+}
+
+function toDateInput(value: Date) {
+    return value.toISOString().slice(0, 10);
+}
+
+function parseDateInput(value: string | null) {
+    if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+    const parsed = new Date(`${value}T00:00:00`);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
 function getDatabaseErrorMessage(error: any): string {
@@ -26,7 +36,7 @@ function getDatabaseErrorMessage(error: any): string {
     return 'Database error. Please try again.';
 }
 
-export const load = async ({ locals, params }) => {
+export const load = async ({ locals, params, url }) => {
     if (!locals.session || !locals.user) {
         throw error(401, 'Unauthorized');
     }
@@ -55,7 +65,6 @@ export const load = async ({ locals, params }) => {
         .select({
             personId: people.id,
             name: people.name,
-            fullname: people.fullname,
             role: people.role
         })
         .from(classPerson)
@@ -75,22 +84,24 @@ export const load = async ({ locals, params }) => {
     const students = members.filter((member) => member.role === 'student');
     const studentIds = students.map((student) => student.personId);
 
-    // Load existing attendance for this date
-    const sessionDate = params.session;
+    const selectedDate = parseDateInput(url.searchParams.get('date')) ?? new Date();
+    const selectedDateInput = toDateInput(selectedDate);
+    const sessionRecord = await db
+        .select()
+        .from(attendanceSessions)
+        .where(eq(attendanceSessions.date, selectedDateInput))
+        .limit(1)
+        .get();
+
     const existingAttendance =
-        studentIds.length > 0
+        studentIds.length > 0 && sessionRecord
             ? await db
                   .select({
                       personId: attendance.personId,
                       status: attendance.status
                   })
                   .from(attendance)
-                  .where(
-                      and(
-                          eq(attendance.date, sessionDate),
-                          inArray(attendance.personId, studentIds)
-                      )
-                  )
+                  .where(and(eq(attendance.session, sessionRecord.id), inArray(attendance.personId, studentIds)))
             : [];
 
     const attendanceByPersonId = new Map(
@@ -106,10 +117,11 @@ export const load = async ({ locals, params }) => {
         person,
         classInfo,
         teacher,
-        sessionDate,
-        dateLabel: formatDateLabel(sessionDate),
+        selectedDate: selectedDateInput,
+        dateLabel: formatDateLabel(selectedDateInput),
         sheetRows,
-        isNewRecord: existingAttendance.length === 0
+        isNewRecord: existingAttendance.length === 0,
+        hasSession: Boolean(sessionRecord)
     };
 };
 
@@ -161,33 +173,58 @@ export const actions = {
         }
 
         const formData = await request.formData();
-        const sessionDate = params.session;
-        const studentIds = JSON.parse(formData.get('studentIds') as string);
-        const statuses = JSON.parse(formData.get('statuses') as string);
+        const sessionDate = formData.get('date')?.toString() ?? '';
+        const studentIds = JSON.parse(formData.get('studentIds') as string) as string[];
+        const statuses = JSON.parse(formData.get('statuses') as string) as Record<string, string>;
+
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(sessionDate)) {
+            return fail(400, { message: 'Invalid date selected.' });
+        }
 
         try {
-            // Delete existing records for this date
-            const existingRecords = await db
-                .select({ id: attendance.id })
-                .from(attendance)
-                .where(
-                    and(
-                        eq(attendance.date, sessionDate),
-                        inArray(attendance.personId, studentIds)
-                    )
-                );
+            let sessionRecord = await db
+                .select()
+                .from(attendanceSessions)
+                .where(eq(attendanceSessions.date, sessionDate))
+                .limit(1)
+                .get();
 
-            if (existingRecords.length > 0) {
-                for (const record of existingRecords) {
-                    await db.delete(attendance).where(eq(attendance.id, record.id));
-                }
+            if (!sessionRecord) {
+                await db.insert(attendanceSessions).values({
+                    date: sessionDate,
+                    updatedBy: locals.user!.id
+                });
+
+                sessionRecord = await db
+                    .select()
+                    .from(attendanceSessions)
+                    .where(eq(attendanceSessions.date, sessionDate))
+                    .limit(1)
+                    .get();
+            }
+
+            if (!sessionRecord) {
+                return fail(500, { message: 'Unable to create attendance session.' });
+            }
+
+            // Delete existing records for this session and students
+            if (studentIds.length > 0) {
+                await db
+                    .delete(attendance)
+                    .where(
+                        and(
+                            eq(attendance.session, sessionRecord.id),
+                            inArray(attendance.personId, studentIds)
+                        )
+                    );
             }
 
             // Insert new records
             const recordsToInsert = studentIds.map((studentId: string) => ({
                 personId: studentId,
-                date: sessionDate,
-                status: statuses[studentId] || 'absent'
+                session: sessionRecord.id,
+                status: (statuses[studentId] as 'present' | 'late' | 'absent' | 'excused') || 'absent',
+                updatedBy: locals.user!.id
             }));
 
             if (recordsToInsert.length > 0) {

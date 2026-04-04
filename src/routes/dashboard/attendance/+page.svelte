@@ -1,5 +1,5 @@
 <script>
-	let { data } = $props();
+	let { data } = /** @type {{ data: any }} */ ($props());
 
 	const periodOptions = [
 		{ value: "this-week", label: "This week" },
@@ -14,28 +14,6 @@
 	$effect(() => {
 		selectedPeriod = data.selectedPeriod;
 	});
-
-	let adminSearch = $state("");
-	const normalizedAdminSearch = $derived(adminSearch.trim().toLowerCase());
-
-	const filteredAdminClasses = $derived(
-		data.role !== "admin"
-			? []
-			: data.classes.filter((cls) => {
-					if (!normalizedAdminSearch) return true;
-					return (
-						(cls.title ?? "")
-							.toLowerCase()
-							.includes(normalizedAdminSearch) ||
-						(cls.description ?? "")
-							.toLowerCase()
-							.includes(normalizedAdminSearch) ||
-						(cls.tags ?? "")
-							.toLowerCase()
-							.includes(normalizedAdminSearch)
-					);
-				}),
-	);
 
 	/** @param {string} status */
 	function statusClass(status) {
@@ -69,6 +47,17 @@
 					</p>
 					<form class="row g-3 align-items-end" method="GET">
 						<div class="col-12 col-md-4">
+							<label for="search" class="form-label">Search</label>
+							<input
+								id="search"
+								class="form-control"
+								type="search"
+								name="search"
+								placeholder="Date, status, notes"
+								value={data.search}
+							/>
+						</div>
+						<div class="col-12 col-md-4">
 							<label for="period" class="form-label">Period</label
 							>
 							<select
@@ -85,7 +74,7 @@
 							</select>
 						</div>
 						{#if selectedPeriod === "custom"}
-							<div class="col-12 col-md-3">
+							<div class="col-12 col-md-2">
 								<label for="from" class="form-label">From</label
 								>
 								<input
@@ -96,7 +85,7 @@
 									value={data.from}
 								/>
 							</div>
-							<div class="col-12 col-md-3">
+							<div class="col-12 col-md-2">
 								<label for="to" class="form-label">To</label>
 								<input
 									id="to"
@@ -213,6 +202,27 @@
 		<h3 class="h6 mb-0">Your Classes</h3>
 		<span class="badge text-bg-primary">{data.classes.length} classes</span>
 	</div>
+
+	<form method="GET" class="row g-3 mb-4">
+		<div class="col-12 col-lg-9">
+			<label class="visually-hidden" for="searchClasses">Search classes</label>
+			<div class="input-group">
+				<input
+					id="searchClasses"
+					class="form-control"
+					type="search"
+					name="search"
+					placeholder="Search by class title, description, or tags"
+					value={data.search}
+				/>
+				<button class="btn btn-outline-secondary" type="submit">Find</button>
+			</div>
+		</div>
+		<div class="col-12 col-lg-3 d-flex align-items-end gap-2">
+			<button class="btn btn-dark w-100" type="submit">Apply</button>
+			<a class="btn btn-outline-secondary" href="/dashboard/attendance">Reset</a>
+		</div>
+	</form>
 
 	{#if data.classes.length === 0}
 		<div class="alert alert-info">No classes assigned yet.</div>

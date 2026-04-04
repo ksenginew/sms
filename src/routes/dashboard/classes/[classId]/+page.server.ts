@@ -66,7 +66,6 @@ export const load = async ({ locals, params, url }) => {
 		.select({
 			id: people.id,
 			name: people.name,
-			fullname: people.fullname,
 			email: people.email,
 			role: people.role
 		})

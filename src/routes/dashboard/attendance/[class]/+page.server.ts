@@ -1,45 +1,22 @@
 import { error } from '@sveltejs/kit';
-import { desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, lte } from 'drizzle-orm';
 import { db } from '$lib/server/db';
-import { attendance, classes, classPerson, people } from '$lib/server/db/schema';
+import { attendance, attendanceSessions, classes, classPerson, people } from '$lib/server/db/schema';
 
-function toDateInput(value: Date) {
-    return value.toISOString().slice(0, 10);
-}
+const toYearMonth = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 
-function formatDateLabel(value: string) {
-    const date = new Date(`${value}T00:00:00`);
-    return new Intl.DateTimeFormat('en-GB', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric'
-    }).format(date);
-}
-
-export const load = async ({ locals, params }) => {
-    if (!locals.session || !locals.user) {
-        throw error(401, 'Unauthorized');
-    }
-
-    const person =
-        locals.person ??
-        (await db.select().from(people).where(eq(people.userId, locals.user.id)).limit(1).get());
-
-    if (!person) {
-        throw error(401, 'Unauthorized');
-    }
+export const load = async ({ locals, params, url }) => {
+    if (!locals.person)
+        return error(401, 'Unauthorized');
 
     const classInfo = await db.select().from(classes).where(eq(classes.id, params.class)).limit(1).get();
-
-    if (!classInfo) {
+    if (!classInfo)
         throw error(404, 'Class not found');
-    }
 
     const members = await db
         .select({
-            personId: people.id,
+            id: people.id,
             name: people.name,
-            fullname: people.fullname,
             role: people.role
         })
         .from(classPerson)
@@ -48,63 +25,66 @@ export const load = async ({ locals, params }) => {
         .orderBy(desc(people.createdAt));
 
     const allowed =
-        person.role === 'admin' ||
-        members.some((member) => member.personId === person.id && member.role === 'teacher');
+        locals.person.role === 'admin' ||
+        members.some((member) => member.id === locals.person!.id && member.role === 'teacher');
 
     if (!allowed) {
         throw error(403, 'Forbidden');
     }
 
-    const teacher = members.find((member) => member.role === 'teacher') ?? null;
+    const teachers = members.filter((member) => member.role === 'teacher');
     const students = members.filter((member) => member.role === 'student');
-    const studentIds = students.map((student) => student.personId);
 
-    const attendanceRows =
-        studentIds.length > 0
-            ? await db
-                  .select({
-                      personId: attendance.personId,
-                      date: attendance.date,
-                      status: attendance.status
-                  })
-                  .from(attendance)
-                  .where(inArray(attendance.personId, studentIds))
-                  .orderBy(desc(attendance.date))
-            : [];
+    const monthBase = url.searchParams.has('month') ? new Date(url.searchParams.get('month')!) : new Date();
+    const monthStart = `${monthBase.getFullYear()}-${String(monthBase.getMonth() + 1).padStart(2, '0')}-01`;
+    const monthEnd = `${monthBase.getFullYear()}-${String(monthBase.getMonth() + 1).padStart(2, '0')}-31`;
+    const previousMonthDate = new Date(monthBase.getFullYear(), monthBase.getMonth() - 1, 1);
+    const nextMonthDate = new Date(monthBase.getFullYear(), monthBase.getMonth() + 1, 1);
+    const sessionRows = await db
+        .select()
+        .from(attendanceSessions)
+        .where(
+            and(
+                gte(attendanceSessions.date, monthStart),
+                lte(attendanceSessions.date, monthEnd)
+            )
+        )
+        .orderBy(attendanceSessions.date);
 
-    const uniqueDates = Array.from(new Set(attendanceRows.map((row) => row.date))).sort(
-        (left, right) => right.localeCompare(left)
-    );
+    const attendanceRows = sessionRows.length > 0 && students.length > 0
+        ? await db
+            .select({
+                personId: attendance.personId,
+                sessionId: attendance.session,
+                status: attendance.status
+            })
+            .from(attendance)
+            .where(
+                and(
+                    inArray(attendance.personId, students.map((student) => student.id)),
+                    inArray(attendance.session, sessionRows.map((session) => session.id))
+                )
+            )
+        : [];
 
-    const attendanceByKey = new Map(
-        attendanceRows.map((row) => [`${row.personId}:${row.date}`, row.status])
-    );
+    type AttendanceStatus = 'present' | 'absent' | 'late' | 'excused';
+    const tableData: Record<string, Record<number, AttendanceStatus>> = {}; // personId -> (sessionId -> status)
 
-    const attendanceColumns = uniqueDates.map((date) => ({
-        value: date,
-        label: formatDateLabel(date),
-        href: `/dashboard/attendance/${classInfo.id}/${date}`
-    }));
-
-    const sheetRows = students.map((student) => ({
-        ...student,
-        attendance: attendanceColumns.map((column) => ({
-            date: column.value,
-            status: attendanceByKey.get(`${student.personId}:${column.value}`) ?? null
-        }))
-    }));
-
-    const today = toDateInput(new Date());
-    const todayAlreadyMarked = attendanceColumns.some((column) => column.value === today);
+    for (const attendanceRecord of attendanceRows) {
+        if (!tableData[attendanceRecord.personId]) {
+            tableData[attendanceRecord.personId] = {};
+        }
+        tableData[attendanceRecord.personId][attendanceRecord.sessionId] = attendanceRecord.status;
+    }
 
     return {
-        person,
         classInfo,
-        teacher,
+        teachers,
         students,
-        attendanceColumns,
-        sheetRows,
-        today,
-        todayAlreadyMarked
+        sessions: sessionRows,
+        attendance: tableData,
+        selectedMonth: toYearMonth(monthBase),
+        previousMonth: toYearMonth(previousMonthDate),
+        nextMonth: toYearMonth(nextMonthDate),
     };
 };

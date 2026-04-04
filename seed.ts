@@ -20,6 +20,7 @@ const db = drizzle(client, { schema });
 const {
 	account,
 	attendance,
+	attendanceSessions,
 	classPerson,
 	classes,
 	exams,
@@ -41,9 +42,6 @@ type PersonSeed = {
 	id: string;
 	role: 'admin' | 'teacher' | 'student';
 	name: string;
-	firstName: string;
-	lastName: string;
-	fullname: string;
 	email: string;
 	idnumber: string;
 	phone: string;
@@ -51,7 +49,7 @@ type PersonSeed = {
 	address: string;
 	createdAt: Date;
 	updatedAt: Date;
-	updatedBy: string;
+	updatedBy: string | null;
 	userId?: string;
 };
 
@@ -59,11 +57,11 @@ type ClassSeed = {
 	id: string;
 	title: string;
 	description: string;
-	tags: string;
+	tags: string[];
 	visible: boolean;
 	createdAt: Date;
 	updatedAt: Date;
-	updatedBy: string;
+	updatedBy: string | null;
 	grade: number;
 	section: SectionLetter;
 	teacherIds: string[];
@@ -81,7 +79,7 @@ type ExamSeed = {
 	id: number;
 	title: string;
 	description: string;
-	tags: string;
+	tags: string[];
 	visible: boolean;
 	createdAt: Date;
 };
@@ -106,18 +104,25 @@ type ScoreSeed = {
 	json: string;
 	createdAt: Date;
 	updatedAt: Date;
-	updatedBy: string;
+	updatedBy: string | null;
 };
 
 type AttendanceSeed = {
 	id: number;
 	personId: string;
-	date: string;
+	session: number;
 	status: AttendanceStatus;
-	notes: string | null;
 	createdAt: Date;
 	updatedAt: Date;
-	updatedBy: string;
+	updatedBy: string | null;
+};
+
+type AttendanceSessionSeed = {
+	id: number;
+	date: string;
+	createdAt: Date;
+	updatedAt: Date;
+	updatedBy: string | null;
 };
 
 const ACADEMIC_YEAR = 2026;
@@ -176,13 +181,6 @@ const streets = [
 	'Main Street', 'School Road', 'Temple Road', 'Station Road', 'Lake Road', 'Market Road',
 	'Hospital Road', 'Church Street', 'Maha Vidyalaya Mawatha', 'Paddy Field Lane'
 ] as const;
-
-const remarks = {
-	present: ['On time and prepared.', 'Participated actively.', 'Regular attendance.'],
-	late: ['Late due to transport delays.', 'Arrived after morning assembly.', 'Missed the first session.'],
-	absent: ['Absent for family reasons.', 'No prior notice received.', 'Away due to illness.'],
-	excused: ['Medical note submitted.', 'Approved leave for a family event.', 'Excused by the class teacher.']
-} as const;
 
 const subjectDifficulty: Record<string, number> = {
 	'Sinhala Language': 2,
@@ -265,22 +263,13 @@ function attendanceStatusFor(personId: string, date: string, weekday: number): A
 	return 'excused';
 }
 
-function attendanceNoteFor(status: AttendanceStatus, personId: string, date: string) {
-	const options = remarks[status];
-	const roll = createHash(`${status}:${personId}:${date}`);
-	return options[roll % options.length];
-}
-
 function createPeople() {
 	const admins: PersonSeed[] = Array.from({ length: 50 }, (_, index) => {
 		const name = createPersonName(index, 4, 7, 9);
 		return {
 			id: `admin-${pad(index + 1, 4)}`,
 			role: 'admin',
-			name: name.fullname,
-			firstName: name.first,
-			lastName: name.last,
-			fullname: name.fullname,
+			name: `${name.first} ${name.last}`,
 			email: `admin.${pad(index + 1, 4)}@eduscend.school`,
 			idnumber: `ADM-${ACADEMIC_YEAR}-${pad(index + 1, 4)}`,
 			phone: createPhone(index, '011'),
@@ -288,7 +277,7 @@ function createPeople() {
 			address: createAddress(index, 'admin'),
 			createdAt: SEED_TIMESTAMP,
 			updatedAt: SEED_TIMESTAMP,
-			updatedBy: 'seed'
+			updatedBy: null
 		};
 	});
 
@@ -297,10 +286,7 @@ function createPeople() {
 		return {
 			id: `teacher-${pad(index + 1, 4)}`,
 			role: 'teacher',
-			name: name.fullname,
-			firstName: name.first,
-			lastName: name.last,
-			fullname: name.fullname,
+			name: `${name.first} ${name.last}`,
 			email: `teacher.${pad(index + 1, 4)}@eduscend.school`,
 			idnumber: `TCH-${ACADEMIC_YEAR}-${pad(index + 1, 4)}`,
 			phone: createPhone(index + 50, '011'),
@@ -308,7 +294,7 @@ function createPeople() {
 			address: createAddress(index + 50, 'teacher'),
 			createdAt: SEED_TIMESTAMP,
 			updatedAt: SEED_TIMESTAMP,
-			updatedBy: 'seed'
+			updatedBy: null
 		};
 	});
 
@@ -317,10 +303,7 @@ function createPeople() {
 		return {
 			id: `student-${pad(index + 1, 4)}`,
 			role: 'student',
-			name: name.fullname,
-			firstName: name.first,
-			lastName: name.last,
-			fullname: name.fullname,
+			name: `${name.first} ${name.last}`,
 			email: `student.${pad(index + 1, 4)}@eduscend.school`,
 			idnumber: `STD-${ACADEMIC_YEAR}-${pad(index + 1, 4)}`,
 			phone: createPhone(index + 250, '011'),
@@ -328,7 +311,7 @@ function createPeople() {
 			address: createAddress(index + 250, 'student'),
 			createdAt: SEED_TIMESTAMP,
 			updatedAt: SEED_TIMESTAMP,
-			updatedBy: 'seed'
+			updatedBy: null
 		};
 	});
 
@@ -348,7 +331,7 @@ function createAuthUsers(peopleRows: PersonSeed[]) {
 		person.userId = userId;
 		return {
 			id: userId,
-			name: person.fullname,
+			name: person.name,
 			email: person.email,
 			emailVerified: true,
 			image: null,
@@ -359,7 +342,7 @@ function createAuthUsers(peopleRows: PersonSeed[]) {
 
 	const unlinkedUsers: AuthUserSeed[] = unlinkedPeople.map((person, index) => ({
 		id: `auth-user-${pad(index + 1001, 4)}`,
-		name: person.fullname,
+		name: person.name,
 		email: person.email,
 		emailVerified: index % 4 !== 0,
 		image: null,
@@ -390,9 +373,7 @@ function createAuthAccounts(userRows: AuthUserSeed[]) {
 
 	for (let index = 0; index < userRows.length; index += 1) {
 		const authUser = userRows[index];
-		const tokenSeed = createHash(`${authUser.id}:token:${index}`).toString(36).padStart(16, '0');
 		const createdAt = new Date(SEED_TIMESTAMP.getTime() + index * 1000);
-		const expiresAt = new Date(createdAt.getTime() + 1000 * 60 * 60 * 24 * 30);
 
 		accountRows.push({
 			id: `account-${pad(index + 1, 5)}`,
@@ -428,17 +409,15 @@ function createClasses(teacherIds: string[], studentIds: string[]) {
 				id: `class-${grade}-${section.toLowerCase()}-${ACADEMIC_YEAR}`,
 				title,
 				description: `Grade ${grade} Section ${section} cohort for the ${ACADEMIC_YEAR} academic year.`,
-				tags: JSON.stringify([
+				tags: [
 					`grade-${grade}`,
 					`section-${section.toLowerCase()}`,
 					`year-${ACADEMIC_YEAR}`,
-					'attendance',
-					'exams'
-				]),
+				],
 				visible: true,
 				createdAt: SEED_TIMESTAMP,
 				updatedAt: SEED_TIMESTAMP,
-				updatedBy: 'seed',
+				updatedBy: null,
 				grade,
 				section,
 				teacherIds: teacherAssignments,
@@ -478,26 +457,26 @@ function createExamsAndPapers(classSeeds: ClassSeed[]) {
 	const examsRows: ExamSeed[] = [];
 	const papersRows: PaperSeed[] = [];
 	const paperIdsByClassId = new Map<string, number[]>();
+	const paperIdsByGrade = new Map<number, number[]>();
 	let paperId = 1;
 
-	for (const classSeed of classSeeds) {
+	for (const grade of gradeLevels) {
 		const exam = {
-			id: classSeed.grade * 100 + sectionLetters.indexOf(classSeed.section) + 1,
-			title: `Term 1 Exam - ${classSeed.title}`,
-			description: `Common first-term assessment for ${classSeed.title}.`,
-			tags: JSON.stringify([
-				`grade-${classSeed.grade}`,
-				`section-${classSeed.section.toLowerCase()}`,
+			id: grade,
+			title: `Term 1 Exam - Grade ${grade} (${ACADEMIC_YEAR})`,
+			description: `Common first-term assessment for Grade ${grade} in ${ACADEMIC_YEAR}.`,
+			tags: [
+				`grade-${grade}`,
 				'term-1',
 				`year-${ACADEMIC_YEAR}`
-			]),
+			],
 			visible: true,
 			createdAt: SEED_TIMESTAMP
 		} satisfies ExamSeed;
 		examsRows.push(exam);
 
 		const paperIds: number[] = [];
-		for (const subjectTitle of gradeSubjects(classSeed.grade)) {
+		for (const subjectTitle of gradeSubjects(grade)) {
 			const subject = subjectByTitle.get(subjectTitle);
 			if (!subject) {
 				throw new Error(`Missing subject seed for ${subjectTitle}`);
@@ -510,17 +489,26 @@ function createExamsAndPapers(classSeeds: ClassSeed[]) {
 				subjectId: subject.id,
 				subjectTitle,
 				title: `${subjectTitle} Paper`,
-				description: `${subjectTitle} paper for ${classSeed.title}.`,
+				description: `${subjectTitle} paper for Grade ${grade}.`,
 				structure: JSON.stringify({
 					totalMarks: 100,
 					passMarks: 35,
 					durationMinutes: subjectTitle === 'Mathematics' || subjectTitle === 'Science' ? 120 : 90,
 					questionCount: subjectTitle === 'Mathematics' || subjectTitle === 'Science' ? 6 : 5,
-					note: `Prepared for ${classSeed.title}`
+					note: `Prepared for Grade ${grade}`
 				}),
 				createdAt: SEED_TIMESTAMP
 			});
 			paperId += 1;
+		}
+
+		paperIdsByGrade.set(grade, paperIds);
+	}
+
+	for (const classSeed of classSeeds) {
+		const paperIds = paperIdsByGrade.get(classSeed.grade);
+		if (!paperIds) {
+			throw new Error(`Missing paper set for grade ${classSeed.grade}`);
 		}
 
 		paperIdsByClassId.set(classSeed.id, paperIds);
@@ -542,7 +530,7 @@ function createClassMembership(classSeeds: ClassSeed[]) {
 				personId: teacherId,
 				createdAt: SEED_TIMESTAMP,
 				updatedAt: SEED_TIMESTAMP,
-				updatedBy: 'seed'
+				updatedBy: null
 			});
 			id += 1;
 		}
@@ -554,7 +542,7 @@ function createClassMembership(classSeeds: ClassSeed[]) {
 				personId: studentId,
 				createdAt: SEED_TIMESTAMP,
 				updatedAt: SEED_TIMESTAMP,
-				updatedBy: 'seed'
+				updatedBy: null
 			});
 			id += 1;
 		}
@@ -564,33 +552,44 @@ function createClassMembership(classSeeds: ClassSeed[]) {
 }
 
 function createAttendance(classSeeds: ClassSeed[]) {
-	const rows: AttendanceSeed[] = [];
-	let id = 1;
+	const sessionRows: AttendanceSessionSeed[] = [];
+	const attendanceRows: AttendanceSeed[] = [];
+	let attendanceId = 1;
+	let attendanceSessionId = 1;
 
 	for (let date = new Date(START_DATE); date <= END_DATE; date.setUTCDate(date.getUTCDate() + 1)) {
 		const weekday = date.getUTCDay();
 		if (weekday === 0 || weekday === 6) continue;
 
 		const dateValue = formatDate(date);
+		sessionRows.push({
+			id: attendanceSessionId,
+			date: dateValue,
+			createdAt: SEED_TIMESTAMP,
+			updatedAt: SEED_TIMESTAMP,
+			updatedBy: null
+		});
+
 		for (const classSeed of classSeeds) {
 			for (const studentId of classSeed.studentIds) {
 				const status = attendanceStatusFor(studentId, dateValue, weekday);
-				rows.push({
-					id,
+				attendanceRows.push({
+					id: attendanceId,
 					personId: studentId,
-					date: dateValue,
+					session: attendanceSessionId,
 					status,
-					notes: status === 'present' ? null : attendanceNoteFor(status, studentId, dateValue),
 					createdAt: SEED_TIMESTAMP,
 					updatedAt: SEED_TIMESTAMP,
-					updatedBy: 'seed'
+					updatedBy: null
 				});
-				id += 1;
+				attendanceId += 1;
 			}
 		}
+
+		attendanceSessionId += 1;
 	}
 
-	return rows;
+	return { sessionRows, attendanceRows };
 }
 
 function createScores(classSeeds: ClassSeed[], paperIdsByClassId: Map<string, number[]>, papersRows: PaperSeed[]) {
@@ -624,7 +623,7 @@ function createScores(classSeeds: ClassSeed[], paperIdsByClassId: Map<string, nu
 					}),
 					createdAt: SEED_TIMESTAMP,
 					updatedAt: SEED_TIMESTAMP,
-					updatedBy: 'seed'
+					updatedBy: null
 				});
 				id += 1;
 			}
@@ -640,14 +639,158 @@ async function insertBatches(database: any, table: any, rows: Array<Record<strin
 	}
 }
 
+async function ensureFts5Ready() {
+	const check = await client.execute("SELECT sqlite_compileoption_used('ENABLE_FTS5') AS enabled");
+	const enabled = Number(check.rows[0]?.enabled ?? 0);
+	if (!enabled) {
+		throw new Error('SQLite FTS5 is not enabled in this database build.');
+	}
+
+	await client.execute(`
+		CREATE VIRTUAL TABLE IF NOT EXISTS people_fts
+		USING fts5(name, email, idnumber, phone, mobile_phone, address, role, user_id, content='people', content_rowid='rowid');
+	`);
+	await client.execute(`
+		CREATE VIRTUAL TABLE IF NOT EXISTS classes_fts
+		USING fts5(title, description, tags, visible, content='classes', content_rowid='rowid');
+	`);
+	await client.execute(`
+		CREATE VIRTUAL TABLE IF NOT EXISTS exams_fts
+		USING fts5(title, description, tags, visible, content='exams', content_rowid='rowid');
+	`);
+	await client.execute(`
+		CREATE VIRTUAL TABLE IF NOT EXISTS subjects_fts
+		USING fts5(title, description, content='subjects', content_rowid='rowid');
+	`);
+	await client.execute(`
+		CREATE VIRTUAL TABLE IF NOT EXISTS papers_fts
+		USING fts5(title, description, structure, subject_id, exam_id, content='papers', content_rowid='rowid');
+	`);
+
+	await client.execute(`
+		CREATE TRIGGER IF NOT EXISTS people_ai AFTER INSERT ON people BEGIN
+			INSERT INTO people_fts(rowid, name, email, idnumber, phone, mobile_phone, address, role, user_id)
+			VALUES (new.rowid, new.name, new.email, new.idnumber, new.phone, new.mobile_phone, new.address, new.role, new.user_id);
+		END;
+	`);
+	await client.execute(`
+		CREATE TRIGGER IF NOT EXISTS people_ad AFTER DELETE ON people BEGIN
+			INSERT INTO people_fts(people_fts, rowid, name, email, idnumber, phone, mobile_phone, address, role, user_id)
+			VALUES ('delete', old.rowid, old.name, old.email, old.idnumber, old.phone, old.mobile_phone, old.address, old.role, old.user_id);
+		END;
+	`);
+	await client.execute(`
+		CREATE TRIGGER IF NOT EXISTS people_au AFTER UPDATE ON people BEGIN
+			INSERT INTO people_fts(people_fts, rowid, name, email, idnumber, phone, mobile_phone, address, role, user_id)
+			VALUES ('delete', old.rowid, old.name, old.email, old.idnumber, old.phone, old.mobile_phone, old.address, old.role, old.user_id);
+			INSERT INTO people_fts(rowid, name, email, idnumber, phone, mobile_phone, address, role, user_id)
+			VALUES (new.rowid, new.name, new.email, new.idnumber, new.phone, new.mobile_phone, new.address, new.role, new.user_id);
+		END;
+	`);
+
+	await client.execute(`
+		CREATE TRIGGER IF NOT EXISTS classes_ai AFTER INSERT ON classes BEGIN
+			INSERT INTO classes_fts(rowid, title, description, tags, visible)
+			VALUES (new.rowid, new.title, new.description, new.tags, new.visible);
+		END;
+	`);
+	await client.execute(`
+		CREATE TRIGGER IF NOT EXISTS classes_ad AFTER DELETE ON classes BEGIN
+			INSERT INTO classes_fts(classes_fts, rowid, title, description, tags, visible)
+			VALUES ('delete', old.rowid, old.title, old.description, old.tags, old.visible);
+		END;
+	`);
+	await client.execute(`
+		CREATE TRIGGER IF NOT EXISTS classes_au AFTER UPDATE ON classes BEGIN
+			INSERT INTO classes_fts(classes_fts, rowid, title, description, tags, visible)
+			VALUES ('delete', old.rowid, old.title, old.description, old.tags, old.visible);
+			INSERT INTO classes_fts(rowid, title, description, tags, visible)
+			VALUES (new.rowid, new.title, new.description, new.tags, new.visible);
+		END;
+	`);
+
+	await client.execute(`
+		CREATE TRIGGER IF NOT EXISTS exams_ai AFTER INSERT ON exams BEGIN
+			INSERT INTO exams_fts(rowid, title, description, tags, visible)
+			VALUES (new.rowid, new.title, new.description, new.tags, new.visible);
+		END;
+	`);
+	await client.execute(`
+		CREATE TRIGGER IF NOT EXISTS exams_ad AFTER DELETE ON exams BEGIN
+			INSERT INTO exams_fts(exams_fts, rowid, title, description, tags, visible)
+			VALUES ('delete', old.rowid, old.title, old.description, old.tags, old.visible);
+		END;
+	`);
+	await client.execute(`
+		CREATE TRIGGER IF NOT EXISTS exams_au AFTER UPDATE ON exams BEGIN
+			INSERT INTO exams_fts(exams_fts, rowid, title, description, tags, visible)
+			VALUES ('delete', old.rowid, old.title, old.description, old.tags, old.visible);
+			INSERT INTO exams_fts(rowid, title, description, tags, visible)
+			VALUES (new.rowid, new.title, new.description, new.tags, new.visible);
+		END;
+	`);
+
+	await client.execute(`
+		CREATE TRIGGER IF NOT EXISTS subjects_ai AFTER INSERT ON subjects BEGIN
+			INSERT INTO subjects_fts(rowid, title, description)
+			VALUES (new.rowid, new.title, new.description);
+		END;
+	`);
+	await client.execute(`
+		CREATE TRIGGER IF NOT EXISTS subjects_ad AFTER DELETE ON subjects BEGIN
+			INSERT INTO subjects_fts(subjects_fts, rowid, title, description)
+			VALUES ('delete', old.rowid, old.title, old.description);
+		END;
+	`);
+	await client.execute(`
+		CREATE TRIGGER IF NOT EXISTS subjects_au AFTER UPDATE ON subjects BEGIN
+			INSERT INTO subjects_fts(subjects_fts, rowid, title, description)
+			VALUES ('delete', old.rowid, old.title, old.description);
+			INSERT INTO subjects_fts(rowid, title, description)
+			VALUES (new.rowid, new.title, new.description);
+		END;
+	`);
+
+	await client.execute(`
+		CREATE TRIGGER IF NOT EXISTS papers_ai AFTER INSERT ON papers BEGIN
+			INSERT INTO papers_fts(rowid, title, description, structure, subject_id, exam_id)
+			VALUES (new.rowid, new.title, new.description, new.structure, new.subject_id, new.exam_id);
+		END;
+	`);
+	await client.execute(`
+		CREATE TRIGGER IF NOT EXISTS papers_ad AFTER DELETE ON papers BEGIN
+			INSERT INTO papers_fts(papers_fts, rowid, title, description, structure, subject_id, exam_id)
+			VALUES ('delete', old.rowid, old.title, old.description, old.structure, old.subject_id, old.exam_id);
+		END;
+	`);
+	await client.execute(`
+		CREATE TRIGGER IF NOT EXISTS papers_au AFTER UPDATE ON papers BEGIN
+			INSERT INTO papers_fts(papers_fts, rowid, title, description, structure, subject_id, exam_id)
+			VALUES ('delete', old.rowid, old.title, old.description, old.structure, old.subject_id, old.exam_id);
+			INSERT INTO papers_fts(rowid, title, description, structure, subject_id, exam_id)
+			VALUES (new.rowid, new.title, new.description, new.structure, new.subject_id, new.exam_id);
+		END;
+	`);
+}
+
+async function rebuildFtsIndexes() {
+	await client.execute(`INSERT INTO people_fts(people_fts) VALUES ('rebuild');`);
+	await client.execute(`INSERT INTO classes_fts(classes_fts) VALUES ('rebuild');`);
+	await client.execute(`INSERT INTO exams_fts(exams_fts) VALUES ('rebuild');`);
+	await client.execute(`INSERT INTO subjects_fts(subjects_fts) VALUES ('rebuild');`);
+	await client.execute(`INSERT INTO papers_fts(papers_fts) VALUES ('rebuild');`);
+}
+
 async function main() {
+	await ensureFts5Ready();
+
 	const { peopleRows, teacherIds, studentIds } = createPeople();
 	const { userRows, linkedPeopleCount, unlinkedPeopleCount, extraUserCount } = createAuthUsers(peopleRows);
 	const accountRows = createAuthAccounts(userRows);
 	const classSeeds = createClasses(teacherIds, studentIds);
 	const { subjectRows, examsRows, papersRows, paperIdsByClassId } = createExamsAndPapers(classSeeds);
 	const classMembershipRows = createClassMembership(classSeeds);
-	const attendanceRows = createAttendance(classSeeds);
+	const { sessionRows, attendanceRows } = createAttendance(classSeeds);
 	const scoreRows = createScores(classSeeds, paperIdsByClassId, papersRows);
 	const classRows = classSeeds.map(({ grade, section, teacherIds: _teacherIds, studentIds: _studentIds, paperIds: _paperIds, ...row }) => row);
 	const paperInsertionRows = papersRows.map(({ subjectTitle: _subjectTitle, ...row }) => row);
@@ -660,6 +803,7 @@ async function main() {
 		await tx.delete(papers);
 		await tx.delete(exams);
 		await tx.delete(attendance);
+		await tx.delete(attendanceSessions);
 		await tx.delete(classPerson);
 		await tx.delete(classes);
 		await tx.delete(subjects);
@@ -674,9 +818,12 @@ async function main() {
 		await tx.insert(subjects).values(subjectRows);
 		await tx.insert(exams).values(examsRows);
 		await tx.insert(papers).values(paperInsertionRows);
+		await insertBatches(tx, attendanceSessions, sessionRows, 500);
 		await insertBatches(tx, attendance, attendanceRows, 2000);
 		await insertBatches(tx, scores, scoreRows, 2000);
 	});
+
+	await rebuildFtsIndexes();
 
 	console.log(`Seeded ${peopleRows.length} people, ${userRows.length} auth users, ${accountRows.length} auth accounts, ${linkedPeopleCount} linked auth users, ${unlinkedPeopleCount} unlinked people with auth users, ${extraUserCount} extra auth users, ${classSeeds.length} classes, ${attendanceRows.length} attendance rows, and ${scoreRows.length} score rows.`);
 }

@@ -107,7 +107,6 @@
                 <th scope="col">Name</th>
                 <th scope="col">First name</th>
                 <th scope="col">Last name</th>
-                <th scope="col">Full name</th>
                 <th scope="col">Email</th>
                 <th scope="col">ID number</th>
                 <th scope="col">Phone</th>
@@ -131,9 +130,6 @@
                         </button>
                     </td>
                     <td>{person.name ?? ""}</td>
-                    <td>{person.firstName ?? ""}</td>
-                    <td>{person.lastName ?? ""}</td>
-                    <td>{person.fullname ?? ""}</td>
                     <td>{person.email ?? ""}</td>
                     <td>{person.idnumber ?? ""}</td>
                     <td>{person.phone ?? ""}</td>
@@ -219,26 +215,6 @@
                                 class="form-control"
                                 id="fullname"
                                 name="fullname"
-                            />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label" for="firstName"
-                                >First name</label
-                            >
-                            <input
-                                class="form-control"
-                                id="firstName"
-                                name="firstName"
-                            />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label" for="lastName"
-                                >Last name</label
-                            >
-                            <input
-                                class="form-control"
-                                id="lastName"
-                                name="lastName"
                             />
                         </div>
                         <div class="col-md-4">
@@ -352,39 +328,6 @@
                                 id="edit-name"
                                 name="name"
                                 value={data.editingPerson?.name ?? ""}
-                            />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label" for="edit-fullname"
-                                >Full name</label
-                            >
-                            <input
-                                class="form-control"
-                                id="edit-fullname"
-                                name="fullname"
-                                value={data.editingPerson?.fullname ?? ""}
-                            />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label" for="edit-firstName"
-                                >First name</label
-                            >
-                            <input
-                                class="form-control"
-                                id="edit-firstName"
-                                name="firstName"
-                                value={data.editingPerson?.firstName ?? ""}
-                            />
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label" for="edit-lastName"
-                                >Last name</label
-                            >
-                            <input
-                                class="form-control"
-                                id="edit-lastName"
-                                name="lastName"
-                                value={data.editingPerson?.lastName ?? ""}
                             />
                         </div>
                         <div class="col-md-4">

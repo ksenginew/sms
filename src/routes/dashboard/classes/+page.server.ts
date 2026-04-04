@@ -1,7 +1,7 @@
-import { and, desc, eq, like, or } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import { error, fail, redirect } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
-import { classPerson, classes, people } from '$lib/server/db/schema';
+import { classPerson, classes } from '$lib/server/db/schema';
 
 function readValue(formData: FormData, key: string) {
 	const value = formData.get(key)?.toString().trim();
@@ -16,14 +16,22 @@ function internalActionError(action: string) {
 	return fail(500, { action, message: 'Server error. Please try again.' });
 }
 
+function readIntParam(value: string | null, fallback: number) {
+	if (!value) return fallback;
+	const parsed = Number.parseInt(value, 10);
+	return Number.isFinite(parsed) ? parsed : fallback;
+}
+
 export const load = async ({ locals, url }) => {
 	if (!locals.person) return error(401, 'Unauthorized');
+	const isAdmin = locals.person.role === 'admin';
 
 	const search = (url.searchParams.get('search') ?? '').trim();
-	const showHidden = url.searchParams.get('showHidden') === '1';
+	const limit = Math.max(1, Math.min(100, readIntParam(url.searchParams.get('limit'), 20)));
+	const offset = Math.max(0, readIntParam(url.searchParams.get('offset'), 0));
 
 	const searchCondition = search
-		? or(like(classes.title, `%${search}%`), like(classes.description, `%${search}%`))
+		? sql`classes.rowid IN (SELECT rowid FROM classes_fts WHERE classes_fts MATCH ${search} ORDER BY rank)`
 		: undefined;
 
 	let classesList: Array<{
@@ -35,7 +43,7 @@ export const load = async ({ locals, url }) => {
 		updatedAt: Date;
 	}> = [];
 
-	if (locals.person.role === 'admin') {
+	if (isAdmin) {
 		const filters = [];
 		if (searchCondition) filters.push(searchCondition);
 
@@ -43,11 +51,11 @@ export const load = async ({ locals, url }) => {
 			filters.length === 0 ? undefined : filters.length === 1 ? filters[0] : and(...filters);
 
 		classesList = whereClause
-			? await db.select().from(classes).where(whereClause).orderBy(desc(classes.updatedAt))
-			: await db.select().from(classes).orderBy(desc(classes.updatedAt));
+			? await db.select().from(classes).where(whereClause).orderBy(desc(classes.updatedAt)).limit(limit).offset(offset)
+			: await db.select().from(classes).orderBy(desc(classes.updatedAt)).limit(limit).offset(offset);
 	} else {
 		const filters = [eq(classPerson.personId, locals.person.id)];
-		if (!showHidden) filters.push(eq(classes.visible, true));
+		filters.push(eq(classes.visible, true));
 		if (searchCondition) filters.push(searchCondition);
 
 		classesList = await db
@@ -62,13 +70,45 @@ export const load = async ({ locals, url }) => {
 			.from(classPerson)
 			.innerJoin(classes, eq(classes.id, classPerson.classId))
 			.where(and(...filters))
-			.orderBy(desc(classes.updatedAt));
+			.orderBy(desc(classes.updatedAt))
+			.limit(limit)
+			.offset(offset);
 	}
+
+	const totalResult = isAdmin
+		? await db
+				.select({ count: sql<number>`count(*)` })
+				.from(classes)
+				.where(searchCondition)
+				.get()
+		: await db
+				.select({ count: sql<number>`count(*)` })
+				.from(classPerson)
+				.innerJoin(classes, eq(classes.id, classPerson.classId))
+				.where(
+					and(
+						eq(classPerson.personId, locals.person.id),
+						eq(classes.visible, true),
+						searchCondition
+					)
+				)
+				.get();
+
+	const total = Number(totalResult?.count ?? 0);
+	const hasPrevious = offset > 0;
+	const hasNext = offset + classesList.length < total;
 
 	return {
 		classesList,
 		search,
-		showHidden,
+		limit,
+		offset,
+		total,
+		hasPrevious,
+		hasNext,
+		previousOffset: Math.max(0, offset - limit),
+		nextOffset: offset + limit,
+		isAdmin
 	};
 };
 

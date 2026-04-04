@@ -1,7 +1,7 @@
 import { error } from '@sveltejs/kit';
-import { and, desc, eq, gte, inArray, lte, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, like, lte, or, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
-import { attendance, classes, classPerson, people } from '$lib/server/db/schema';
+import { attendance, attendanceSessions, classes, classPerson, people } from '$lib/server/db/schema';
 
 type PeriodKey = 'this-week' | 'this-month' | 'last-month' | 'this-year' | 'custom';
 
@@ -93,9 +93,21 @@ export const load = async ({ locals, url }) => {
         throw error(403, 'Forbidden');
     }
 
+    const search = (url.searchParams.get('search') ?? '').trim();
+
+    const classSearchCondition = search
+        ? or(
+            like(classes.title, `%${search}%`),
+            like(classes.description, `%${search}%`),
+            like(classes.tags, `%${search}%`)
+        )
+        : undefined;
+
     const classRows =
         person.role === 'admin'
-            ? await db.select().from(classes).orderBy(desc(classes.createdAt))
+            ? classSearchCondition
+                ? await db.select().from(classes).where(classSearchCondition).orderBy(desc(classes.createdAt))
+                : await db.select().from(classes).orderBy(desc(classes.createdAt))
             : person.role === 'teacher'
                 ? await db
                     .select({
@@ -110,7 +122,11 @@ export const load = async ({ locals, url }) => {
                     })
                     .from(classes)
                     .innerJoin(classPerson, eq(classes.id, classPerson.classId))
-                    .where(eq(classPerson.personId, person.id))
+                    .where(
+                        classSearchCondition
+                            ? and(eq(classPerson.personId, person.id), classSearchCondition)
+                            : eq(classPerson.personId, person.id)
+                    )
                     .orderBy(desc(classes.createdAt))
                 : [];
 
@@ -144,16 +160,27 @@ export const load = async ({ locals, url }) => {
     const studentAttendanceRows =
         person.role === 'student'
             ? await db
-                .select()
+                .select({
+                    personId: attendance.personId,
+                    status: attendance.status,
+                    date: attendanceSessions.date
+                })
                 .from(attendance)
+                .innerJoin(attendanceSessions, eq(attendanceSessions.id, attendance.session))
                 .where(
                     and(
                         eq(attendance.personId, person.id),
-                        gte(attendance.date, dateRange.from),
-                        lte(attendance.date, dateRange.to)
+                        gte(attendanceSessions.date, dateRange.from),
+                        lte(attendanceSessions.date, dateRange.to),
+                        search
+                            ? or(
+                                like(attendanceSessions.date, `%${search}%`),
+                                like(attendance.status, `%${search}%`)
+                            )
+                            : undefined
                     )
                 )
-                .orderBy(desc(attendance.date))
+                .orderBy(desc(attendanceSessions.date))
             : [];
 
     const attendanceSummary = {
@@ -169,6 +196,7 @@ export const load = async ({ locals, url }) => {
         role: person.role,
         classes: classesForView,
         selectedPeriod: dateRange.selectedPeriod,
+        search,
         from: dateRange.from,
         to: dateRange.to,
         attendanceRows: studentAttendanceRows,

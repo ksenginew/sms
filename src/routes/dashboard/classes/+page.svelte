@@ -11,9 +11,18 @@
     function classLink(classId: string) {
         const params = new URLSearchParams();
         if (data.search) params.set("search", data.search);
-        if (data.showHidden) params.set("showHidden", "1");
+        params.set("limit", String(data.limit));
+        params.set("offset", String(data.offset));
         const query = params.toString();
         return `/dashboard/classes/${classId}${query ? `?${query}` : ""}`;
+    }
+
+    function listUrl(nextOffset: number) {
+        const params = new URLSearchParams();
+        if (data.search) params.set("search", data.search);
+        params.set("limit", String(data.limit));
+        params.set("offset", String(Math.max(0, nextOffset)));
+        return `/dashboard/classes?${params.toString()}`;
     }
 </script>
 
@@ -21,7 +30,7 @@
     class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-3"
 >
     <h2 class="mb-1">Classes</h2>
-    {#if data.person?.role === "admin"}
+    {#if data.isAdmin}
         <button
             class="btn btn-primary"
             type="button"
@@ -47,24 +56,39 @@
             >
         </div>
     </div>
-    <div class="col-12 col-md-6 col-lg-2 d-flex align-items-center">
-        <div class="form-check">
-            <input
-                class="form-check-input"
-                id="showHidden"
-                type="checkbox"
-                name="showHidden"
-                value="1"
-                checked={data.showHidden}
-            />
-            <label class="form-check-label" for="showHidden">Show hidden</label>
-        </div>
+    <div class="col-12 col-md-6 col-lg-2">
+        <label class="form-label" for="limit">Limit</label>
+        <select class="form-select" id="limit" name="limit">
+            <option value="10" selected={data.limit === 10}>10</option>
+            <option value="20" selected={data.limit === 20}>20</option>
+            <option value="50" selected={data.limit === 50}>50</option>
+            <option value="100" selected={data.limit === 100}>100</option>
+        </select>
     </div>
+    <input type="hidden" name="offset" value="0" />
     <div class="col-12 col-md-6 col-lg-2 d-flex align-items-end gap-2">
         <button class="btn btn-dark w-100" type="submit">Apply</button>
         <a class="btn btn-outline-secondary" href="/dashboard/classes">Reset</a>
     </div>
 </form>
+
+<div class="d-flex justify-content-between align-items-center mb-2">
+    <div class="text-body-secondary">
+        Showing {Math.min(data.offset + 1, data.total)}-{Math.min(data.offset + data.classesList.length, data.total)} of {data.total}
+    </div>
+    <div class="d-flex gap-2">
+        <a
+            class="btn btn-sm btn-outline-secondary {data.hasPrevious ? '' : 'disabled'}"
+            href={data.hasPrevious ? listUrl(data.previousOffset) : '#'}
+            aria-disabled={!data.hasPrevious}
+        >Previous</a>
+        <a
+            class="btn btn-sm btn-outline-secondary {data.hasNext ? '' : 'disabled'}"
+            href={data.hasNext ? listUrl(data.nextOffset) : '#'}
+            aria-disabled={!data.hasNext}
+        >Next</a>
+    </div>
+</div>
 
 {#if form?.message}
     <div class="alert alert-danger mb-3">{form.message}</div>
@@ -74,7 +98,7 @@
     {#each data.classesList as classItem}
         <div class="col-md-6 col-xl-4">
             <div class="card h-100">
-                <div class="card-body d-flex flex-column">
+                <div class="card-body d-flex flex-column position-relative">
                     <div
                         class="d-flex justify-content-between align-items-start mb-2 gap-2"
                     >
@@ -92,10 +116,10 @@
                     <div class="small text-body-secondary mb-3">
                         Updated {formatDate(classItem.updatedAt)}
                     </div>
-                    <div class="mt-auto">
+                    <div class="mt-auto d-flex justify-content-end">
                         <a
                             href={classLink(classItem.id)}
-                            class="btn btn-outline-primary btn-sm w-100"
+                            class="stretched-link text-decoration-none small fw-semibold"
                             >Open class</a
                         >
                     </div>
@@ -109,7 +133,7 @@
     {/each}
 </div>
 
-{#if data.person?.role === "admin"}
+{#if data.isAdmin}
     <div
         class="modal fade"
         id="createClassModal"
