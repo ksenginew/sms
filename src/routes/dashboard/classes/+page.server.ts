@@ -16,28 +16,8 @@ function internalActionError(action: string) {
 	return fail(500, { action, message: 'Server error. Please try again.' });
 }
 
-async function requirePerson(locals: App.Locals) {
-	if (!locals.session || !locals.user || !locals.person) {
-		throw error(401, 'Unauthorized');
-	}
-
-	return locals.person;
-}
-
-async function canAccessClass(personId: string, classId: string) {
-	const memberRow = await db
-		.select({ id: classPerson.id })
-		.from(classPerson)
-		.where(and(eq(classPerson.personId, personId), eq(classPerson.classId, classId)))
-		.limit(1)
-		.get();
-
-	return Boolean(memberRow);
-}
-
 export const load = async ({ locals, url }) => {
-	const person = await requirePerson(locals);
-	const isAdmin = person.role === 'admin';
+	if (!locals.person) return error(401, 'Unauthorized');
 
 	const search = (url.searchParams.get('search') ?? '').trim();
 	const showHidden = url.searchParams.get('showHidden') === '1';
@@ -55,7 +35,7 @@ export const load = async ({ locals, url }) => {
 		updatedAt: Date;
 	}> = [];
 
-	if (isAdmin) {
+	if (locals.person.role === 'admin') {
 		const filters = [];
 		if (searchCondition) filters.push(searchCondition);
 
@@ -66,7 +46,7 @@ export const load = async ({ locals, url }) => {
 			? await db.select().from(classes).where(whereClause).orderBy(desc(classes.updatedAt))
 			: await db.select().from(classes).orderBy(desc(classes.updatedAt));
 	} else {
-		const filters = [eq(classPerson.personId, person.id)];
+		const filters = [eq(classPerson.personId, locals.person.id)];
 		if (!showHidden) filters.push(eq(classes.visible, true));
 		if (searchCondition) filters.push(searchCondition);
 
@@ -89,14 +69,12 @@ export const load = async ({ locals, url }) => {
 		classesList,
 		search,
 		showHidden,
-		isAdmin
 	};
 };
 
 export const actions = {
 	create: async ({ request, locals }) => {
-		const person = await requirePerson(locals);
-		if (person.role !== 'admin') throw error(403, 'Forbidden');
+		if (locals.person!.role !== 'admin') throw error(403, 'Forbidden');
 
 		const formData = await request.formData();
 		const title = readValue(formData, 'title');
@@ -110,7 +88,7 @@ export const actions = {
 				title,
 				description: readValue(formData, 'description'),
 				visible: formData.get('visible') === 'on',
-				updatedBy: person.id
+				updatedBy: locals.person!.id
 			});
 		} catch {
 			return internalActionError('create');

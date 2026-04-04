@@ -28,7 +28,7 @@
 </script>
 
 <svelte:head>
-	<title>Eduscend LMS | Sign out</title>
+	<title>Eduscend | Sign out</title>
 </svelte:head>
 
 <div class="min-vh-100 d-flex align-items-center py-5 bg-body-tertiary">
@@ -38,7 +38,7 @@
 				<div class="card border-0 shadow-lg rounded-4">
 					<div class="card-body p-4">
 						<div class="text-center mb-4">
-							<p class="text-uppercase text-secondary small fw-semibold mb-2">Eduscend LMS</p>
+							<p class="text-uppercase text-secondary small fw-semibold mb-2">Eduscend</p>
 							<h1 class="h5 fw-bold mb-2">Sign out</h1>
 							<p class="text-body-secondary small mb-0">
 								Are you sure you want to sign out of your account?

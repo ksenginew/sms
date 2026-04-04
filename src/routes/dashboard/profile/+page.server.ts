@@ -6,6 +6,7 @@ import { people, account } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
 import fs from 'fs/promises';
 
+// Helper function to safely get string values from FormData
 function formDataGet(formData: FormData, key: string): string | undefined {
     const value = formData.get(key);
     return typeof value === 'string' ? value : undefined;
@@ -20,40 +21,54 @@ export const load: PageServerLoad = async (event) => {
     return {
         user,
         person: personRecord[0] || null,
+
+        // Get linked accounts for the user
         accounts: (await auth.api.listUserAccounts({
             headers: event.request.headers
-        })).map(account => ({
-            providerId: account.providerId,
-            accountId: account.accountId,
-            createdAt: account.createdAt,
         }))
+            // Map to only include necessary fields for the frontend
+            .map(account => ({
+                providerId: account.providerId,
+                accountId: account.accountId,
+                createdAt: account.createdAt,
+            }))
     };
 };
 
 export const actions: Actions = {
     updateProfile: async (event) => {
         const formData = await event.request.formData();
-        const name = formDataGet(formData, 'name');
-        const email = formDataGet(formData, 'email');
+        const name = formDataGet(formData, 'name')?.trim().replace(/\s+/g, ' ');
+        const email = formDataGet(formData, 'email')?.trim();
 
+        // name and email are required
         if (!name || !email) {
             return fail(400, { message: 'Name and email are required' });
         }
 
+        // Validate name length
+        if (name.length > 255 || !name.length) {
+            return fail(400, { message: 'Name must be between 1 and 255 characters' });
+        }
+
+        // Validate email format
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            return fail(400, { message: 'Invalid email format' });
+        }
+
         try {
-            // Update user info in better-auth
+            // Update name in better-auth
             await auth.api.updateUser({
-                body: {
-                    name,
-                },
+                body: { name },
                 headers: event.request.headers
             });
-            await auth.api.changeEmail({
-                body: {
-                    newEmail: email,
-                },
-                headers: event.request.headers
-            });
+
+            // Update email in better-auth if it has changed
+            if (email !== event.locals.user!.email)
+                await auth.api.changeEmail({
+                    body: {newEmail: email,},
+                    headers: event.request.headers
+                });
 
             // Update or create person record in people table
             const existingPerson = await db
@@ -80,7 +95,7 @@ export const actions: Actions = {
                     email !== event.locals.user!.email
                         ? ' Please check your new email to verify the change.'
                         : ''
-                )
+                ),
             };
         } catch (error) {
             console.error('Profile update error:', error);
@@ -90,6 +105,8 @@ export const actions: Actions = {
     uploadImage: async (event) => {
         const formData = await event.request.formData();
         const imageFile = formData.get('image');
+
+        // Validate the uploaded file
         if (!(imageFile instanceof File)) {
             return fail(400, { message: 'Invalid image file' });
         }
@@ -109,10 +126,9 @@ export const actions: Actions = {
             const buffer = Buffer.from(arrayBuffer);
             await fs.writeFile(imagePath, buffer);
 
+            // Update user's image in better-auth and people table
             await auth.api.updateUser({
-                body: {
-                    image: `/${imagePath}`,
-                },
+                body: {image: `/${imagePath}`,},
                 headers: event.request.headers
             });
             await db
@@ -122,7 +138,7 @@ export const actions: Actions = {
                     updatedBy: event.locals.user!.id
                 })
                 .where(eq(people.userId, event.locals.user!.id));
-                
+
             return {
                 success: true,
                 message: 'Image uploaded successfully',

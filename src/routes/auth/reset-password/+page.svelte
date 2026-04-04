@@ -76,7 +76,7 @@
 </script>
 
 <svelte:head>
-	<title>Eduscend LMS | Reset password</title>
+	<title>Eduscend | Reset password</title>
 </svelte:head>
 
 <div class="min-vh-100 d-flex align-items-center py-5 bg-body-tertiary">
@@ -86,7 +86,7 @@
 				<div class="card border-0 shadow-lg rounded-4">
 					<div class="card-body p-4 p-md-4">
 						<div class="text-center mb-4">
-							<p class="text-uppercase text-secondary small fw-semibold mb-2">Eduscend LMS</p>
+							<p class="text-uppercase text-secondary small fw-semibold mb-2">Eduscend</p>
 							<h1 class="h4 fw-bold mb-2">{resetToken ? 'Set a new password' : 'Reset your password'}</h1>
 							<p class="text-body-secondary small mb-0">
 								{resetToken

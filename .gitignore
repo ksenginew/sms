@@ -24,3 +24,7 @@ vite.config.ts.timestamp-*
 
 # SQLite
 *.db
+
+# all inside upload except .gitkeep
+/upload/*
+!/upload/.gitkeep

@@ -1,4 +1,6 @@
 <script lang="ts">
+    import { enhance } from '$app/forms';
+
 	let { data, form } = $props();
 
 	function providerLabel(providerId: string | null | undefined) {
@@ -62,7 +64,7 @@
 		<div class="card">
 			<div class="card-header">Update Profile</div>
 			<div class="card-body">
-				<form method="POST" action="?/updateProfile">
+				<form method="POST" action="?/updateProfile" use:enhance>
 					<div class="row g-3">
 						<div class="col-md-6">
 							<label class="form-label" for="name">Name</label>
@@ -70,7 +72,7 @@
 								id="name"
 								name="name"
 								class="form-control"
-								value={data.person?.name ?? data.user?.name ?? ""}
+								bind:value={data.user.name}
 								required
 							/>
 						</div>
@@ -82,7 +84,7 @@
 								name="email"
 								type="email"
 								class="form-control"
-								value={data.person?.email ?? data.user?.email ?? ""}
+								bind:value={data.user.email}
 								required
 							/>
 						</div>

@@ -4,6 +4,7 @@ import { building } from "$app/environment";
 import { db } from "$lib/server/db";
 import { eq } from "drizzle-orm";
 import { people } from "$lib/server/db/schema";
+import { redirect } from "@sveltejs/kit";
 
 
 // const devRoles = {
@@ -31,9 +32,17 @@ export async function handle({ event, resolve }) {
   });
 
   if (session) {
+    // If the user is already authenticated and trying to access the sign-in or sign-up page, redirect them to the dashboard.
+    if (event.url.pathname === "/auth/signup" || event.url.pathname === "/auth/signin") return redirect(302, "/dashboard");
+
     event.locals.session = session.session;
     event.locals.user = session.user;
     event.locals.person = await db.select().from(people).where(eq(people.userId, session.user.id)).limit(1).get()
+  }
+  
+  // If the user is not authenticated and trying to access a protected route, redirect them to the sign-in page.
+  else if (event.url.pathname === "/auth/signout" || event.url.pathname.startsWith("/dashboard")) {
+    return redirect(302, "/auth/signin");
   }
 
   return svelteKitHandler({ event, resolve, auth, building });

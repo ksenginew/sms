@@ -21,7 +21,7 @@
     class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-3"
 >
     <h2 class="mb-1">Classes</h2>
-    {#if data.isAdmin}
+    {#if data.person?.role === "admin"}
         <button
             class="btn btn-primary"
             type="button"
@@ -109,7 +109,7 @@
     {/each}
 </div>
 
-{#if data.isAdmin}
+{#if data.person?.role === "admin"}
     <div
         class="modal fade"
         id="createClassModal"

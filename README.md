@@ -1,6 +1,6 @@
-# Eduscend LMS
+# Eduscend
 
-Welcome to the **Eduscend LMS** project repository, developed by Group **Moonhare**. This platform is a centralized, cloud-based solution designed to replace manual, paper-based school management processes in Sri Lanka with a secure, mobile-friendly Progressive Web App.
+Welcome to the **Eduscend** project repository, developed by Group **Moonhare**. This platform is a centralized, cloud-based solution designed to replace manual, paper-based school management processes in Sri Lanka with a secure, mobile-friendly Progressive Web App.
 
 ## 🛠 Tech Stack
 
@@ -45,7 +45,7 @@ bunx drizzle-kit push
 ```
 
 ### Building
-To create a production-ready version of the LMS:
+To create a production-ready version:
 ```sh
 bun run build
 ```
