@@ -1,4 +1,7 @@
 <script>
+	import AttendanceOverview from '$lib/components/AttendanceOverview.svelte';
+	import AttendanceBreakdown from '$lib/components/AttendanceBreakdown.svelte';
+
 	let { data } = /** @type {{ data: any }} */ ($props());
 
 	const periodOptions = [
@@ -8,12 +11,53 @@
 		{ value: "this-year", label: "This year" },
 		{ value: "custom", label: "Custom range" },
 	];
+	const attendanceStateOptions = [
+		{ value: "", label: "All states" },
+		{ value: "present", label: "Present" },
+		{ value: "late", label: "Late" },
+		{ value: "absent", label: "Absent" },
+		{ value: "excused", label: "Excused" },
+	];
 
 	let selectedPeriod = $state("this-week");
+	let selectedStatus = $state("");
+	let selectedLimit = $state("25");
 
 	$effect(() => {
 		selectedPeriod = data.selectedPeriod;
+		selectedStatus = data.statusFilter ?? "";
+		selectedLimit = String(data.limit ?? 25);
 	});
+
+	/** @param {number} nextOffset */
+	function studentListUrl(nextOffset) {
+		const params = new URLSearchParams();
+		params.set("period", data.selectedPeriod);
+
+		if (data.selectedPeriod === "custom") {
+			params.set("from", data.from);
+			params.set("to", data.to);
+		}
+
+		if (data.tableSearch) params.set("tableSearch", data.tableSearch);
+		if (data.statusFilter) params.set("tableStatus", data.statusFilter);
+		params.set("tableLimit", String(data.limit ?? 25));
+		params.set("tableOffset", String(Math.max(0, nextOffset)));
+
+		return `?${params.toString()}`;
+	}
+
+	function studentFilterResetUrl() {
+		const params = new URLSearchParams();
+		params.set("period", data.selectedPeriod);
+		if (data.selectedPeriod === "custom") {
+			params.set("from", data.from);
+			params.set("to", data.to);
+		}
+		params.set("tableLimit", "25");
+		params.set("tableOffset", "0");
+		return `?${params.toString()}`;
+	}
 
 	/** @param {string} status */
 	function statusClass(status) {
@@ -33,71 +77,60 @@
 	class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-3"
 >
 	<h2 class="mb-0">Attendance</h2>
-	<span class="badge text-bg-primary text-uppercase">{data.role}</span>
 </div>
 
 {#if data.role === "student"}
 	<div class="row g-4">
 		<div class="col-12">
-			<div class="card">
-				<div class="card-header">Attendance Filter</div>
+			<div class="card shadow-sm rounded-3">
 				<div class="card-body">
 					<p class="text-body-secondary mb-3">
 						Select a period to review your attendance records.
 					</p>
-					<form class="row g-3 align-items-end" method="GET">
-						<div class="col-12 col-md-4">
-							<label for="search" class="form-label">Search</label>
-							<input
-								id="search"
-								class="form-control"
-								type="search"
-								name="search"
-								placeholder="Date, status, notes"
-								value={data.search}
-							/>
-						</div>
-						<div class="col-12 col-md-4">
-							<label for="period" class="form-label">Period</label
-							>
-							<select
-								id="period"
-								class="form-select"
-								name="period"
-								bind:value={selectedPeriod}
-							>
-								{#each periodOptions as period}
-									<option value={period.value}
-										>{period.label}</option
-									>
-								{/each}
-							</select>
+					<form class="row g-3" method="GET">
+						<div class="col-12 col-lg-5">
+							<div class="d-flex align-items-center gap-2">
+								<label for="period" class="form-label mb-0 text-nowrap">Period</label>
+								<select
+									id="period"
+									class="form-select rounded-2 border"
+									name="period"
+									bind:value={selectedPeriod}
+								>
+									{#each periodOptions as period}
+										<option value={period.value}>{period.label}</option>
+									{/each}
+								</select>
+							</div>
 						</div>
 						{#if selectedPeriod === "custom"}
-							<div class="col-12 col-md-2">
-								<label for="from" class="form-label">From</label
-								>
-								<input
-									id="from"
-									class="form-control"
-									type="date"
-									name="from"
-									value={data.from}
-								/>
+							<div class="col-12 col-md-6 col-lg-3">
+								<div class="d-flex align-items-center gap-2">
+									<label for="from" class="form-label mb-0 text-nowrap">From</label>
+									<input
+										id="from"
+										class="form-control rounded-2 border"
+										type="date"
+										name="from"
+										value={data.from}
+									/>
+								</div>
 							</div>
-							<div class="col-12 col-md-2">
-								<label for="to" class="form-label">To</label>
-								<input
-									id="to"
-									class="form-control"
-									type="date"
-									name="to"
-									value={data.to}
-								/>
+							<div class="col-12 col-md-6 col-lg-2">
+								<div class="d-flex align-items-center gap-2">
+									<label for="to" class="form-label mb-0 text-nowrap">To</label>
+									<input
+										id="to"
+										class="form-control rounded-2 border"
+										type="date"
+										name="to"
+										value={data.to}
+									/>
+								</div>
 							</div>
 						{/if}
-						<div class="col-12 col-md-2 d-grid">
-							<button class="btn btn-primary" type="submit"
+						<div class="col-12 col-lg-2 d-flex justify-content-lg-end">
+							<button class="btn btn-primary rounded-2" type="submit"
 								>Apply</button
 							>
 						</div>
@@ -107,48 +140,24 @@
 		</div>
 
 		<div class="col-12">
-			<div class="row g-3">
-				<div class="col-6 col-lg-3">
-					<div class="card h-100 text-center">
-						<div class="card-body">
-							<p class="small text-body-secondary mb-2">
-								Total records
-							</p>
-							<p class="h4 mb-0">
-								{data.attendanceSummary.total}
-							</p>
+			<div class="row g-4">
+				<div class="col-12 col-lg-6">
+			<div class="card shadow-sm rounded-3 border h-100">
+				<div class="card-header border-bottom fw-600">
+							<small class="text-uppercase text-body-secondary">Overall Attendance Percentage</small>
+						</div>
+						<div class="card-body d-flex justify-content-center align-items-center" style="min-height: 220px;">
+							<AttendanceOverview attendanceRows={data.attendanceRows} />
 						</div>
 					</div>
 				</div>
-				<div class="col-6 col-lg-3">
-					<div class="card h-100 text-center">
-						<div class="card-body">
-							<p class="small text-body-secondary mb-2">
-								Present
-							</p>
-							<p class="h4 text-success mb-0">
-								{data.attendanceSummary.present}
-							</p>
+				<div class="col-12 col-lg-6">
+			<div class="card shadow-sm rounded-3 border h-100">
+				<div class="card-header border-bottom fw-600">
+							<small class="text-uppercase text-body-secondary">Attendance State Distribution</small>
 						</div>
-					</div>
-				</div>
-				<div class="col-6 col-lg-3">
-					<div class="card h-100 text-center">
-						<div class="card-body">
-							<p class="small text-body-secondary mb-2">Late</p>
-							<p class="h4 text-warning mb-0">
-								{data.attendanceSummary.late}
-							</p>
-						</div>
-					</div>
-				</div>
-				<div class="col-6 col-lg-3">
-					<div class="card h-100 text-center">
-						<div class="card-body">
-							<p class="small text-body-secondary mb-2">Absent</p>
-							<p class="h4 text-danger mb-0">
-								{data.attendanceSummary.absent}
-							</p>
+						<div class="card-body d-flex justify-content-center align-items-center" style="min-height: 220px;">
+							<AttendanceBreakdown attendanceRows={data.attendanceRows} />
 						</div>
 					</div>
 				</div>
@@ -156,8 +165,69 @@
 		</div>
 
 		<div class="col-12">
-			<div class="card">
-				<div class="card-header">Attendance Records</div>
+			<div class="card shadow-sm rounded-3 border">
+				<div class="card-header border-bottom">Attendance Records</div>
+				<div class="card-body border-bottom">
+					<form method="GET" class="row g-2 align-items-end" data-sveltekit-noscroll>
+						<input type="hidden" name="period" value={data.selectedPeriod} />
+						<input type="hidden" name="from" value={data.from} />
+						<input type="hidden" name="to" value={data.to} />
+						<div class="col-12 col-lg-5">
+							<div class="d-flex align-items-center gap-2">
+								<label class="form-label mb-0 text-nowrap" for="recordSearch"
+									>Search</label
+								>
+								<input
+									id="recordSearch"
+									class="form-control"
+									type="search"
+									name="tableSearch"
+									placeholder="Date or state"
+									value={data.tableSearch}
+								/>
+							</div>
+						</div>
+						<div class="col-12 col-md-6 col-lg-3">
+							<div class="d-flex align-items-center gap-2">
+								<label class="form-label mb-0 text-nowrap" for="recordStatus"
+									>State</label
+								>
+								<select
+									id="recordStatus"
+									class="form-select"
+									name="tableStatus"
+									bind:value={selectedStatus}
+								>
+									{#each attendanceStateOptions as option}
+										<option value={option.value}>{option.label}</option>
+									{/each}
+								</select>
+							</div>
+						</div>
+						<div class="col-12 col-md-6 col-lg-2">
+							<div class="d-flex align-items-center gap-2">
+								<label class="form-label mb-0 text-nowrap" for="recordLimit"
+									>Limit</label
+								>
+								<select
+									id="recordLimit"
+									class="form-select"
+									name="tableLimit"
+									bind:value={selectedLimit}
+								>
+									{#each data.limitOptions as option}
+										<option value={option}>{option}</option>
+									{/each}
+								</select>
+							</div>
+						</div>
+						<input type="hidden" name="tableOffset" value="0" />
+						<div class="col-12 col-lg-2 d-flex gap-2 justify-content-lg-end">
+							<button class="btn btn-dark" type="submit">Apply</button>
+							<a class="btn btn-outline-secondary" href={studentFilterResetUrl()} data-sveltekit-noscroll>Reset</a>
+						</div>
+					</form>
+				</div>
 				<div class="card-body p-0">
 					<div class="table-responsive">
 						<table class="table table-striped align-middle mb-0">
@@ -168,7 +238,7 @@
 								</tr>
 							</thead>
 							<tbody>
-								{#if data.attendanceRows.length === 0}
+								{#if data.tableRows.length === 0}
 									<tr>
 										<td
 											colspan="2"
@@ -178,7 +248,7 @@
 										>
 									</tr>
 								{:else}
-									{#each data.attendanceRows as row}
+									{#each data.tableRows as row}
 										<tr>
 											<td>{row.date}</td>
 											<td
@@ -193,6 +263,29 @@
 							</tbody>
 						</table>
 					</div>
+					<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 p-3 border-top">
+						<div class="text-body-secondary">
+							Showing {data.totalRows === 0 ? 0 : data.offset + 1}-{Math.min(data.offset + data.tableRows.length, data.totalRows)} of {data.totalRows}
+						</div>
+						<div class="d-flex gap-2">
+							<a
+								class={`btn btn-sm btn-outline-secondary ${data.hasPrevious ? "" : "disabled"}`}
+								href={data.hasPrevious ? studentListUrl(data.previousOffset) : "#"}
+								aria-disabled={!data.hasPrevious}
+								data-sveltekit-noscroll
+							>
+								Previous
+							</a>
+							<a
+								class={`btn btn-sm btn-outline-secondary ${data.hasNext ? "" : "disabled"}`}
+								href={data.hasNext ? studentListUrl(data.nextOffset) : "#"}
+								aria-disabled={!data.hasNext}
+								data-sveltekit-noscroll
+							>
+								Next
+							</a>
+						</div>
+					</div>
 				</div>
 			</div>
 		</div>
@@ -204,9 +297,9 @@
 	</div>
 
 	<form method="GET" class="row g-3 mb-4">
-		<div class="col-12 col-lg-9">
-			<label class="visually-hidden" for="searchClasses">Search classes</label>
-			<div class="input-group">
+		<div class="col-12 col-lg-8">
+			<div class="d-flex align-items-center gap-2">
+				<label class="form-label mb-0 text-nowrap" for="searchClasses">Search</label>
 				<input
 					id="searchClasses"
 					class="form-control"
@@ -215,11 +308,10 @@
 					placeholder="Search by class title, description, or tags"
 					value={data.search}
 				/>
-				<button class="btn btn-outline-secondary" type="submit">Find</button>
 			</div>
 		</div>
-		<div class="col-12 col-lg-3 d-flex align-items-end gap-2">
-			<button class="btn btn-dark w-100" type="submit">Apply</button>
+		<div class="col-12 col-lg-4 d-flex align-items-center gap-2 justify-content-lg-end">
+			<button class="btn btn-dark" type="submit">Apply</button>
 			<a class="btn btn-outline-secondary" href="/dashboard/attendance">Reset</a>
 		</div>
 	</form>

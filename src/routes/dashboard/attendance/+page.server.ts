@@ -1,7 +1,14 @@
 import { error } from '@sveltejs/kit';
 import { and, desc, eq, gte, inArray, like, lte, or, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
-import { attendance, attendanceSessions, classes, classPerson, people } from '$lib/server/db/schema';
+import {
+    ATTENDANCE_STATUSES,
+    attendance,
+    attendanceSessions,
+    classes,
+    classPerson,
+    people
+} from '$lib/server/db/schema';
 
 type PeriodKey = 'this-week' | 'this-month' | 'last-month' | 'this-year' | 'custom';
 
@@ -17,6 +24,12 @@ function parseDateInput(value: string | null) {
     const parsed = new Date(`${value}T00:00:00`);
     if (Number.isNaN(parsed.getTime())) return null;
     return parsed;
+}
+
+function readIntParam(value: string | null, fallback: number) {
+    if (!value) return fallback;
+    const parsed = Number.parseInt(value, 10);
+    return Number.isFinite(parsed) ? parsed : fallback;
 }
 
 function getPeriodRange(period: PeriodKey, fromInput: string | null, toInput: string | null) {
@@ -157,7 +170,17 @@ export const load = async ({ locals, url }) => {
     const toParam = url.searchParams.get('to');
     const dateRange = getPeriodRange(period, fromParam, toParam);
 
-    const studentAttendanceRows =
+    const tableSearch = (url.searchParams.get('tableSearch') ?? '').trim();
+    const requestedStatus = (url.searchParams.get('tableStatus') ?? '').trim();
+    const statusFilter = ATTENDANCE_STATUSES.includes(requestedStatus as (typeof ATTENDANCE_STATUSES)[number])
+        ? requestedStatus
+        : '';
+    const limitOptions = [10, 25, 50];
+    const requestedLimit = readIntParam(url.searchParams.get('tableLimit'), 25);
+    const limit = limitOptions.includes(requestedLimit) ? requestedLimit : 25;
+    const offset = Math.max(0, readIntParam(url.searchParams.get('tableOffset'), 0));
+
+    const studentBaseAttendanceRows =
         person.role === 'student'
             ? await db
                 .select({
@@ -171,24 +194,68 @@ export const load = async ({ locals, url }) => {
                     and(
                         eq(attendance.personId, person.id),
                         gte(attendanceSessions.date, dateRange.from),
-                        lte(attendanceSessions.date, dateRange.to),
-                        search
-                            ? or(
-                                like(attendanceSessions.date, `%${search}%`),
-                                like(attendance.status, `%${search}%`)
-                            )
-                            : undefined
+                        lte(attendanceSessions.date, dateRange.to)
                     )
                 )
                 .orderBy(desc(attendanceSessions.date))
             : [];
 
+    const studentAttendanceWhere = and(
+        eq(attendance.personId, person.id),
+        gte(attendanceSessions.date, dateRange.from),
+        lte(attendanceSessions.date, dateRange.to),
+        tableSearch
+            ? or(
+                like(attendanceSessions.date, `%${tableSearch}%`),
+                like(attendance.status, `%${tableSearch}%`)
+            )
+            : undefined,
+        statusFilter ? eq(attendance.status, statusFilter) : undefined
+    );
+
+    const studentAttendanceTotalRow =
+        person.role === 'student'
+            ? await db
+                .select({
+                    count: sql<number>`count(*)`
+                })
+                .from(attendance)
+                .innerJoin(attendanceSessions, eq(attendanceSessions.id, attendance.session))
+                .where(studentAttendanceWhere)
+                .limit(1)
+                .get()
+            : { count: 0 };
+
+    const totalRows = Number(studentAttendanceTotalRow?.count ?? 0);
+    const boundedOffset = totalRows > 0
+        ? Math.min(offset, Math.max(0, totalRows - 1))
+        : 0;
+
+    const studentTableRows =
+        person.role === 'student'
+            ? await db
+                .select({
+                    personId: attendance.personId,
+                    status: attendance.status,
+                    date: attendanceSessions.date
+                })
+                .from(attendance)
+                .innerJoin(attendanceSessions, eq(attendanceSessions.id, attendance.session))
+                .where(studentAttendanceWhere)
+                .orderBy(desc(attendanceSessions.date))
+                .limit(limit)
+                .offset(boundedOffset)
+            : [];
+
+    const hasPrevious = boundedOffset > 0;
+    const hasNext = boundedOffset + studentTableRows.length < totalRows;
+
     const attendanceSummary = {
-        total: studentAttendanceRows.length,
-        present: studentAttendanceRows.filter((row) => row.status === 'present').length,
-        late: studentAttendanceRows.filter((row) => row.status === 'late').length,
-        absent: studentAttendanceRows.filter((row) => row.status === 'absent').length,
-        excused: studentAttendanceRows.filter((row) => row.status === 'excused').length
+        total: studentBaseAttendanceRows.length,
+        present: studentBaseAttendanceRows.filter((row) => row.status === 'present').length,
+        late: studentBaseAttendanceRows.filter((row) => row.status === 'late').length,
+        absent: studentBaseAttendanceRows.filter((row) => row.status === 'absent').length,
+        excused: studentBaseAttendanceRows.filter((row) => row.status === 'excused').length
     };
 
     return {
@@ -197,9 +264,20 @@ export const load = async ({ locals, url }) => {
         classes: classesForView,
         selectedPeriod: dateRange.selectedPeriod,
         search,
+        statusFilter,
+        tableSearch,
         from: dateRange.from,
         to: dateRange.to,
-        attendanceRows: studentAttendanceRows,
+        limit,
+        limitOptions,
+        offset: boundedOffset,
+        totalRows,
+        hasPrevious,
+        hasNext,
+        previousOffset: Math.max(0, boundedOffset - limit),
+        nextOffset: boundedOffset + limit,
+        attendanceRows: studentBaseAttendanceRows,
+        tableRows: studentTableRows,
         attendanceSummary
     };
 };

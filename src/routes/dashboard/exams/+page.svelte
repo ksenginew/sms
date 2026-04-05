@@ -29,32 +29,33 @@
 </div>
 
 <form method="GET" class="row g-3 mb-4">
-	<div class="col-12 col-lg-8">
-		<label class="visually-hidden" for="search">Search exams</label>
-		<div class="input-group">
+	<div class="col-12 col-lg-7">
+		<div class="d-flex align-items-center gap-2">
+			<label class="form-label mb-0 text-nowrap" for="search">Search</label>
 			<input
 				class="form-control"
 				id="search"
 				type="search"
 				name="search"
-				placeholder="Search by exam title, description, or tags"
+				placeholder="Exam title, description, or tags"
 				value={data.search}
 			/>
-			<button class="btn btn-outline-secondary" type="submit">Find</button>
 		</div>
 	</div>
 	<div class="col-12 col-md-6 col-lg-2">
-		<label class="form-label" for="limit">Limit</label>
-		<select class="form-select" id="limit" name="limit">
-			<option value="10" selected={data.limit === 10}>10</option>
-			<option value="20" selected={data.limit === 20}>20</option>
-			<option value="50" selected={data.limit === 50}>50</option>
-			<option value="100" selected={data.limit === 100}>100</option>
-		</select>
+		<div class="d-flex align-items-center gap-2">
+			<label class="form-label mb-0 text-nowrap" for="limit">Limit</label>
+			<select class="form-select" id="limit" name="limit">
+				<option value="10" selected={data.limit === 10}>10</option>
+				<option value="20" selected={data.limit === 20}>20</option>
+				<option value="50" selected={data.limit === 50}>50</option>
+				<option value="100" selected={data.limit === 100}>100</option>
+			</select>
+		</div>
 	</div>
 	<input type="hidden" name="offset" value="0" />
-	<div class="col-12 col-md-6 col-lg-2 d-flex align-items-end gap-2">
-		<button class="btn btn-dark w-100" type="submit">Apply</button>
+	<div class="col-12 col-md-6 col-lg-3 d-flex align-items-center gap-2 justify-content-lg-end">
+		<button class="btn btn-dark" type="submit">Apply</button>
 		<a class="btn btn-outline-secondary" href="/dashboard/exams">Reset</a>
 	</div>
 </form>

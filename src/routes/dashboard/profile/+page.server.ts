@@ -121,7 +121,7 @@ export const actions: Actions = {
 
         try {
             // save in fs
-            const imagePath = `uploads/${crypto.randomUUID()}-${imageFile.name}`;
+            const imagePath = `uploads/${crypto.randomUUID()}${imageFile.type.split('/')[1]}`;
             const arrayBuffer = await imageFile.arrayBuffer();
             const buffer = Buffer.from(arrayBuffer);
             await fs.writeFile(imagePath, buffer);

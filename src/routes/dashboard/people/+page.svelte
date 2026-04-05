@@ -50,28 +50,33 @@
     >
 </div>
 
-<form method="GET" class="row g-3 mb-3">
-    <div class="col-12 col-md-6 col-lg-7">
-        <label class="form-label" for="search">Search</label>
-        <input
-            class="form-control"
-            id="search"
-            name="search"
-            placeholder="Name, email, ID number, phone, role"
-            value={data.search}
-        />
+<form method="GET" class="row g-3 mb-4">
+    <div class="col-12 col-lg-7">
+        <div class="d-flex align-items-center gap-2">
+            <label class="form-label mb-0 text-nowrap" for="search">Search</label>
+            <input
+                class="form-control"
+                id="search"
+                type="search"
+                name="search"
+                placeholder="Name, email, ID number, phone, role"
+                value={data.search}
+            />
+        </div>
     </div>
-    <div class="col-12 col-md-3 col-lg-2">
-        <label class="form-label" for="limit">Limit</label>
-        <select class="form-select" id="limit" name="limit">
-            <option value="10" selected={data.limit === 10}>10</option>
-            <option value="20" selected={data.limit === 20}>20</option>
-            <option value="50" selected={data.limit === 50}>50</option>
-            <option value="100" selected={data.limit === 100}>100</option>
-        </select>
+    <div class="col-12 col-md-6 col-lg-2">
+        <div class="d-flex align-items-center gap-2">
+            <label class="form-label mb-0 text-nowrap" for="limit">Limit</label>
+            <select class="form-select" id="limit" name="limit">
+                <option value="10" selected={data.limit === 10}>10</option>
+                <option value="20" selected={data.limit === 20}>20</option>
+                <option value="50" selected={data.limit === 50}>50</option>
+                <option value="100" selected={data.limit === 100}>100</option>
+            </select>
+        </div>
     </div>
     <input type="hidden" name="offset" value="0" />
-    <div class="col-12 col-md-3 col-lg-3 d-flex align-items-end gap-2">
+    <div class="col-12 col-md-6 col-lg-3 d-flex align-items-center gap-2 justify-content-lg-end">
         <button class="btn btn-dark" type="submit">Apply</button>
         <a class="btn btn-outline-secondary" href="/dashboard/people">Reset</a>
     </div>
@@ -105,8 +110,6 @@
             <tr>
                 <th scope="col">Person ID</th>
                 <th scope="col">Name</th>
-                <th scope="col">First name</th>
-                <th scope="col">Last name</th>
                 <th scope="col">Email</th>
                 <th scope="col">ID number</th>
                 <th scope="col">Phone</th>
