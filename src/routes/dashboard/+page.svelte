@@ -236,13 +236,13 @@
 				<div class="card shadow-sm rounded-3 border h-100">
 					<div class="card-header border-bottom">Direct exam links</div>
 					<div class="card-body d-grid gap-2">
-						{#if data.teacherOverview.examsQuickLinks.length === 0}
+						<!-- {#if data.teacherOverview.examsQuickLinks.length === 0}
 							<p class="text-body-secondary mb-0">No exams linked yet.</p>
 						{:else}
 							{#each data.teacherOverview.examsQuickLinks as item}
 								<a class="btn btn-outline-secondary text-start" href={item.href}>{item.title}</a>
 							{/each}
-						{/if}
+						{/if} -->
 					</div>
 				</div>
 			</div>

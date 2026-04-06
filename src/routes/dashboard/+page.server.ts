@@ -172,27 +172,27 @@ export const load = async (event) => {
             });
         }
 
-        const classIds = teacherClasses.map((item) => item.id);
-        const examRows = classIds.length > 0
-            ? await db
-                .select({
-                    id: exams.id,
-                    title: exams.title,
-                    visible: exams.visible,
-                    createdAt: exams.createdAt
-                })
-                .from(exams)
-                .innerJoin(exam_class, eq(exam_class.examId, exams.id))
-                .where(and(inArray(exam_class.classId, classIds), eq(exams.visible, true)))
-                .orderBy(desc(exams.createdAt))
-            : [];
+        // const classIds = teacherClasses.map((item) => item.id);
+        // const examRows = classIds.length > 0
+        //     ? await db
+        //         .select({
+        //             id: exams.id,
+        //             title: exams.title,
+        //             visible: exams.visible,
+        //             createdAt: exams.createdAt
+        //         })
+        //         .from(exams)
+        //         .innerJoin(exam_class, eq(exam_class.examId, exams.id))
+        //         .where(and(inArray(exam_class.classId, classIds), eq(exams.visible, true)))
+        //         .orderBy(desc(exams.createdAt))
+        //     : [];
 
-        const uniqueExamMap = new Map<number, { id: number; title: string; visible: boolean; createdAt: Date }>();
-        for (const exam of examRows) {
-            if (!uniqueExamMap.has(exam.id)) {
-                uniqueExamMap.set(exam.id, exam);
-            }
-        }
+        // const uniqueExamMap = new Map<number, { id: number; title: string; visible: boolean; createdAt: Date }>();
+        // for (const exam of examRows) {
+        //     if (!uniqueExamMap.has(exam.id)) {
+        //         uniqueExamMap.set(exam.id, exam);
+        //     }
+        // }
 
         return {
             ...base,
@@ -203,10 +203,10 @@ export const load = async (event) => {
                     href: `/dashboard/classes/${item.id}`,
                     title: item.title
                 })),
-                examsQuickLinks: Array.from(uniqueExamMap.values()).slice(0, 6).map((item) => ({
-                    href: `/dashboard/exams/${item.id}`,
-                    title: item.title
-                }))
+                // examsQuickLinks: Array.from(uniqueExamMap.values()).slice(0, 6).map((item) => ({
+                //     href: `/dashboard/exams/${item.id}`,
+                //     title: item.title
+                // }))
             }
         };
     }
