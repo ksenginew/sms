@@ -100,9 +100,9 @@
 				<div class="card shadow-sm rounded-3 border">
 					<div class="card-body">
 						<div class="d-flex align-items-center gap-3 mb-3">
-							{#if data.person.image || data.user.image}
+							{#if data.user.image}
 								<img
-									src={data.person.image || data.user.image}
+									src={data.user.image}
 									alt="Profile"
 									class="rounded-circle border"
 									style="width:64px;height:64px;object-fit:cover;"
@@ -112,11 +112,11 @@
 									class="rounded-circle bg-primary-subtle text-primary-emphasis d-flex align-items-center justify-content-center fw-semibold"
 									style="width:64px;height:64px;"
 								>
-									{initials(data.person.name || data.user.name)}
+									{initials(data.user.name)}
 								</div>
 							{/if}
 							<div>
-								<p class="fw-semibold mb-0">{data.person.name || data.user.name}</p>
+								<p class="fw-semibold mb-0">{data.user.name}</p>
 								<p class="text-body-secondary small mb-0 text-capitalize">{data.role}</p>
 							</div>
 						</div>
@@ -129,7 +129,7 @@
 					<div class="card-body">
 						<div class="border rounded-3 bg-body-tertiary p-3 mb-3">
 							<p class="small text-body-secondary mb-1">User ID</p>
-							<p class="mb-0 fw-semibold text-break">{data.person.idnumber || data.person.id}</p>
+							<p class="mb-0 fw-semibold text-break">{data.user.id}</p>
 						</div>
 
 						<div class="border rounded-3 bg-body-tertiary p-3 text-center">

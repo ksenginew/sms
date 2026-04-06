@@ -41,12 +41,10 @@ function summarizeByStatus(rows: Array<{ status: AttendanceStatus }>) {
     };
 }
 
-export const load = async ({ locals }) => {
-    if (!locals.session || !locals.user || !locals.person) {
-        throw error(401, 'Unauthorized');
-    }
-
-    const person = locals.person;
+export const load = async (event) => {
+    const user = event.locals.user!;
+    const session = event.locals.session!;
+    const person = event.locals.person;
     const now = new Date();
     const today = toDateInput(now);
     const yearStart = `${now.getFullYear()}-01-01`;
@@ -54,8 +52,15 @@ export const load = async ({ locals }) => {
     const base = {
         nowIso: now.toISOString(),
         person,
-        user: locals.user
+        user,
     };
+    
+    if (!person) {
+        return {
+            ...base,
+            role: 'external' as const
+        };
+    }
 
     if (person.role === 'student') {
         const currentYearRows = await db
