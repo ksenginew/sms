@@ -3,152 +3,215 @@ import { desc, eq, like, or, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { ROLES, people } from '$lib/server/db/schema';
 
-function readValue(data: FormData | URLSearchParams, key: string) {
-    const value = data.get(key)?.toString().trim();
-    return value ? value : undefined;
-}
+// This page is intentionally organized as a small service object.
+// The route handlers at the bottom stay thin, while the service owns
+// the actual business logic for loading, creating, updating, and deleting people.
+class PeoplePageService {
+    // The database dependency is injected so the class is easier to test
+    // and so the route does not reach for the DB directly.
+    constructor(private readonly database = db) {}
 
-function getDatabaseErrorMessage(reason: unknown) {
-    const message = reason instanceof Error ? reason.message : String(reason);
-
-    if (/FOREIGN KEY constraint failed/i.test(message)) {
-        return 'The selected user ID does not exist.';
+    // Read a form or query parameter, trim it, and normalize empty strings to undefined.
+    // This keeps validation and insert/update logic from repeating the same cleanup steps.
+    private readValue(data: FormData | URLSearchParams, key: string) {
+        const value = data.get(key)?.toString().trim();
+        return value ? value : undefined;
     }
 
-    if (/NOT NULL constraint failed/i.test(message)) {
-        return 'Please fill in all required fields.';
+    // Parse a numeric query parameter safely.
+    // If the value is missing or invalid, the caller gets the fallback instead.
+    private readIntParam(value: string | null, fallback: number) {
+        if (!value) return fallback;
+        const parsed = Number.parseInt(value, 10);
+        return Number.isFinite(parsed) ? parsed : fallback;
     }
 
-    if (/UNIQUE constraint failed/i.test(message)) {
-        return 'A person with the same value already exists.';
+    // Convert low-level database errors into messages that are safe to show in the UI.
+    // This is a small abstraction layer between SQLite/Drizzle errors and user-facing text.
+    private getDatabaseErrorMessage(reason: unknown) {
+        const message = reason instanceof Error ? reason.message : String(reason);
+
+        if (/FOREIGN KEY constraint failed/i.test(message)) {
+            return 'The selected user ID does not exist.';
+        }
+
+        if (/NOT NULL constraint failed/i.test(message)) {
+            return 'Please fill in all required fields.';
+        }
+
+        if (/UNIQUE constraint failed/i.test(message)) {
+            return 'A person with the same value already exists.';
+        }
+
+        return 'Something went wrong while saving the person. Please try again.';
     }
 
-    return 'Something went wrong while saving the person. Please try again.';
-}
-
-function readIntParam(value: string | null, fallback: number) {
-    if (!value) return fallback;
-    const parsed = Number.parseInt(value, 10);
-    return Number.isFinite(parsed) ? parsed : fallback;
-}
-
-export const load = async ({ locals, url }) => {
-    if (locals.person?.role !== 'admin') {
-        throw error(403, 'Forbidden');
-    }
-
-    const search = readValue(url.searchParams, 'search')?.trim()
-    const limit = Math.max(1, Math.min(100, readIntParam(url.searchParams.get('limit'), 20)));
-    const offset = Math.max(0, readIntParam(url.searchParams.get('offset'), 0));
-    const whereClause = search ? sql`rowid IN (SELECT rowid FROM people_fts WHERE people_fts MATCH ${search} ORDER BY rank)` : undefined;
-
-    const [rows, totalRows, editingPerson] = await Promise.all([
-        db.select().from(people).where(whereClause).orderBy(desc(people.createdAt)).limit(limit).offset(offset),
-        db.select({ count: sql<number>`count(*)` }).from(people).where(whereClause).get(),
-        url.searchParams.get('edit')
-            ? db.select().from(people).where(eq(people.id, url.searchParams.get('edit')!)).limit(1).get()
-            : Promise.resolve(null)
-    ]);
-
-    const total = Number(totalRows?.count ?? 0);
-    const hasPrevious = offset > 0;
-    const hasNext = offset + rows.length < total;
-
-    return {
-        people: rows,
-        editingPerson,
-        search: search ?? '',
-        limit,
-        offset,
-        total,
-        hasPrevious,
-        hasNext,
-        previousOffset: Math.max(0, offset - limit),
-        nextOffset: offset + limit
-    };
-};
-
-export const actions = {
-    create: async ({ request, locals }) => {
+    // Centralized authorization check.
+    // Every operation in this page is restricted to admins, so the rule lives in one place.
+    private assertAdmin(locals: { person?: { role?: string } | null }) {
         if (locals.person?.role !== 'admin') {
             throw error(403, 'Forbidden');
         }
+    }
+
+    // Load the list page state: search term, pagination, and the optional record being edited.
+    // This is the read-side flow for the page.
+    async load({ locals, url }) {
+        this.assertAdmin(locals);
+
+        // Normalize request filters before building the SQL query.
+        const search = this.readValue(url.searchParams, 'search')?.trim();
+        const limit = Math.max(1, Math.min(100, this.readIntParam(url.searchParams.get('limit'), 20)));
+        const offset = Math.max(0, this.readIntParam(url.searchParams.get('offset'), 0));
+
+        // When a search term is present, use the FTS table.
+        // Otherwise, return all people ordered by newest first.
+        const whereClause = search ? sql`rowid IN (SELECT rowid FROM people_fts WHERE people_fts MATCH ${search} ORDER BY rank)` : undefined;
+
+        // Fetch the current page of rows, the total count, and the edit target in parallel.
+        // Doing these queries together keeps the page responsive.
+        const [rows, totalRows, editingPerson] = await Promise.all([
+            this.database.select().from(people).where(whereClause).orderBy(desc(people.createdAt)).limit(limit).offset(offset),
+            this.database.select({ count: sql<number>`count(*)` }).from(people).where(whereClause).get(),
+            url.searchParams.get('edit')
+                ? this.database.select().from(people).where(eq(people.id, url.searchParams.get('edit')!)).limit(1).get()
+                : Promise.resolve(null)
+        ]);
+
+        // The count is used to decide whether the pagination UI should show next/previous links.
+        const total = Number(totalRows?.count ?? 0);
+        const hasPrevious = offset > 0;
+        const hasNext = offset + rows.length < total;
+
+        // Return a single shape to the Svelte page so the UI stays simple.
+        return {
+            people: rows,
+            editingPerson,
+            search: search ?? '',
+            limit,
+            offset,
+            total,
+            hasPrevious,
+            hasNext,
+            previousOffset: Math.max(0, offset - limit),
+            nextOffset: offset + limit
+        };
+    }
+
+    // Create a new person record from the submitted form.
+    // This is the write-side flow for the page.
+    async create({ request, locals }) {
+        this.assertAdmin(locals);
+
+        // Read the form once and validate the required role field before inserting anything.
         const formData = await request.formData();
-        const role = readValue(formData, 'role');
+        const role = this.readValue(formData, 'role');
 
         if (!role || !ROLES.includes(role as (typeof ROLES)[number])) {
             return fail(400, { message: 'Role is required.' });
         }
 
         try {
-            await db.insert(people).values({
-                name: readValue(formData, 'name'),
-                email: readValue(formData, 'email'),
-                idnumber: readValue(formData, 'idnumber'),
-                phone: readValue(formData, 'phone'),
-                mobilePhone: readValue(formData, 'mobilePhone'),
-                address: readValue(formData, 'address'),
+            // Insert only after validation succeeds.
+            await this.database.insert(people).values({
+                name: this.readValue(formData, 'name'),
+                email: this.readValue(formData, 'email'),
+                idnumber: this.readValue(formData, 'idnumber'),
+                phone: this.readValue(formData, 'phone'),
+                mobilePhone: this.readValue(formData, 'mobilePhone'),
+                address: this.readValue(formData, 'address'),
                 role: role as (typeof ROLES)[number],
-                userId: readValue(formData, 'userId'),
+                userId: this.readValue(formData, 'userId'),
                 updatedBy: locals.person?.id
             });
         } catch (reason) {
-            return fail(500, { message: getDatabaseErrorMessage(reason) });
+            // Convert database-specific errors into a friendlier response for the form.
+            return fail(500, { message: this.getDatabaseErrorMessage(reason) });
         }
 
+        // On success, send the user back to the listing page.
         throw redirect(303, '/dashboard/people');
-    },
-    update: async ({ request, locals }) => {
-        if (locals.person?.role !== 'admin') {
-            throw error(403, 'Forbidden');
-        }
-        const formData = await request.formData();
-        const id = readValue(formData, 'id');
-        const role = readValue(formData, 'role');
+    }
 
+    // Update an existing person record.
+    // This follows the same input rules as create, but requires an id.
+    async update({ request, locals }) {
+        this.assertAdmin(locals);
+
+        const formData = await request.formData();
+        const id = this.readValue(formData, 'id');
+        const role = this.readValue(formData, 'role');
+
+        // An update must target an existing row.
         if (!id) {
             return fail(400, { message: 'Missing person id.' });
         }
 
+        // Role remains mandatory because it is a core domain field.
         if (!role || !ROLES.includes(role as (typeof ROLES)[number])) {
             return fail(400, { message: 'Role is required.' });
         }
 
         try {
-            await db.update(people).set({
-                name: readValue(formData, 'name'),
-                email: readValue(formData, 'email'),
-                idnumber: readValue(formData, 'idnumber'),
-                phone: readValue(formData, 'phone'),
-                mobilePhone: readValue(formData, 'mobilePhone'),
-                address: readValue(formData, 'address'),
-                role: role as (typeof ROLES)[number],
-                userId: readValue(formData, 'userId'),
-                updatedBy: locals.person?.id,
-                updatedAt: new Date()
-            }).where(eq(people.id, id));
+            // The update statement writes all editable fields in one pass.
+            await this.database
+                .update(people)
+                .set({
+                    name: this.readValue(formData, 'name'),
+                    email: this.readValue(formData, 'email'),
+                    idnumber: this.readValue(formData, 'idnumber'),
+                    phone: this.readValue(formData, 'phone'),
+                    mobilePhone: this.readValue(formData, 'mobilePhone'),
+                    address: this.readValue(formData, 'address'),
+                    role: role as (typeof ROLES)[number],
+                    userId: this.readValue(formData, 'userId'),
+                    updatedBy: locals.person?.id,
+                    updatedAt: new Date()
+                })
+                .where(eq(people.id, id));
         } catch (reason) {
-            return fail(500, { message: getDatabaseErrorMessage(reason) });
+            // Reuse the same error mapping so the UI behaves consistently.
+            return fail(500, { message: this.getDatabaseErrorMessage(reason) });
         }
 
+        // Redirect after a successful save so refresh does not resubmit the form.
         throw redirect(303, '/dashboard/people');
-    },
-    delete: async ({ request, locals }) => {
-        if (locals.person?.role !== 'admin') {
-            throw error(403, 'Forbidden');
-        }
-        const formData = await request.formData();
-        const id = readValue(formData, 'id');
+    }
 
+    // Delete a person record.
+    // This action is intentionally small because the business rule is simple:
+    // admin only, require an id, then remove the row.
+    async delete({ request, locals }) {
+        this.assertAdmin(locals);
+
+        const formData = await request.formData();
+        const id = this.readValue(formData, 'id');
+
+        // Deletion cannot proceed without a target id.
         if (!id) {
             return fail(400, { message: 'Missing person id.' });
         }
 
         try {
-            await db.delete(people).where(eq(people.id, id));
+            // The schema-level foreign key rules will handle dependent data safely.
+            await this.database.delete(people).where(eq(people.id, id));
         } catch (reason) {
-            return fail(500, { message: getDatabaseErrorMessage(reason) });
+            return fail(500, { message: this.getDatabaseErrorMessage(reason) });
         }
+
+        // Keep navigation behavior consistent with create and update.
         throw redirect(303, '/dashboard/people');
     }
+}
+
+// Single reusable service instance for this route module.
+const peoplePageService = new PeoplePageService();
+
+// Thin adapter functions: SvelteKit calls these exports, and they delegate to the service.
+export const load = (event) => peoplePageService.load(event);
+
+export const actions = {
+    create: (event) => peoplePageService.create(event),
+    update: (event) => peoplePageService.update(event),
+    delete: (event) => peoplePageService.delete(event)
 };
