@@ -2,8 +2,10 @@ import { error, fail } from '@sveltejs/kit';
 import { eq, inArray, and } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { attendance, attendanceSessions, classes, classPerson, people } from '$lib/server/db/schema';
+import { createRoleContext } from '$lib/server/role-context';
 
 function formatDateLabel(value: string) {
+	// Render date consistently for the page header and breadcrumb context.
     const date = new Date(`${value}T00:00:00`);
     return new Intl.DateTimeFormat('en-GB', {
         day: '2-digit',
@@ -17,12 +19,14 @@ function toDateInput(value: Date) {
 }
 
 function parseDateInput(value: string | null) {
+	// Strict yyyy-mm-dd parsing to avoid locale-dependent Date parsing behavior.
     if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
     const parsed = new Date(`${value}T00:00:00`);
     return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
 function getDatabaseErrorMessage(error: any): string {
+	// Translate low-level DB constraint errors into form-friendly messages.
     const message = error?.message?.toLowerCase() ?? '';
     if (message.includes('foreign key')) {
         return 'Invalid reference: Class or student not found.';
@@ -49,6 +53,9 @@ export const load = async ({ locals, params, url }) => {
         throw error(401, 'Unauthorized');
     }
 
+    // Build capability object for authorization checks.
+    const roleContext = createRoleContext(person);
+
     const classInfo = await db
         .select()
         .from(classes)
@@ -60,7 +67,7 @@ export const load = async ({ locals, params, url }) => {
         throw error(404, 'Class not found');
     }
 
-    // Get all class members
+    // Load class members once, then derive teacher/student subsets for the sheet.
     const members = await db
         .select({
             personId: people.id,
@@ -72,9 +79,8 @@ export const load = async ({ locals, params, url }) => {
         .where(eq(classPerson.classId, classInfo.id))
         .orderBy(people.name);
 
-    const allowed =
-        person.role === 'admin' ||
-        members.some((member) => member.personId === person.id && member.role === 'teacher');
+    // Shared role-policy gate for attendance edit access.
+    const allowed = roleContext.canManageAttendanceForClass(members);
 
     if (!allowed) {
         throw error(403, 'Forbidden');
@@ -86,6 +92,8 @@ export const load = async ({ locals, params, url }) => {
 
     const selectedDate = parseDateInput(url.searchParams.get('date')) ?? new Date();
     const selectedDateInput = toDateInput(selectedDate);
+
+    // Attendance records are grouped by session id, so we resolve/create by date.
     const sessionRecord = await db
         .select()
         .from(attendanceSessions)
@@ -94,6 +102,7 @@ export const load = async ({ locals, params, url }) => {
         .get();
 
     const existingAttendance =
+		// Fetch current marks only when both students and a session exist.
         studentIds.length > 0 && sessionRecord
             ? await db
                   .select({
@@ -108,6 +117,7 @@ export const load = async ({ locals, params, url }) => {
         existingAttendance.map((row) => [row.personId, row.status])
     );
 
+    // Pre-fill each row with existing status, defaulting to absent for unmarked rows.
     const sheetRows = students.map((student) => ({
         ...student,
         status: attendanceByPersonId.get(student.personId) ?? 'absent'
@@ -144,6 +154,9 @@ export const actions = {
             throw error(401, 'Unauthorized');
         }
 
+        // Capability object is reused in write flow for consistent authorization.
+        const roleContext = createRoleContext(person);
+
         const classInfo = await db
             .select()
             .from(classes)
@@ -164,15 +177,14 @@ export const actions = {
             .innerJoin(people, eq(people.id, classPerson.personId))
             .where(eq(classPerson.classId, classInfo.id));
 
-        const allowed =
-            person.role === 'admin' ||
-            members.some((member) => member.personId === person.id && member.role === 'teacher');
+        const allowed = roleContext.canManageAttendanceForClass(members);
 
         if (!allowed) {
             throw error(403, 'Forbidden');
         }
 
         const formData = await request.formData();
+		// The UI sends one date plus serialized status map for all students.
         const sessionDate = formData.get('date')?.toString() ?? '';
         const studentIds = JSON.parse(formData.get('studentIds') as string) as string[];
         const statuses = JSON.parse(formData.get('statuses') as string) as Record<string, string>;
@@ -182,6 +194,7 @@ export const actions = {
         }
 
         try {
+			// Resolve the session for selected date; create it if it does not exist yet.
             let sessionRecord = await db
                 .select()
                 .from(attendanceSessions)
@@ -207,7 +220,8 @@ export const actions = {
                 return fail(500, { message: 'Unable to create attendance session.' });
             }
 
-            // Delete existing records for this session and students
+            // Rewrite strategy: delete existing rows for this session+student set,
+            // then insert the submitted state. This keeps writes idempotent.
             if (studentIds.length > 0) {
                 await db
                     .delete(attendance)
@@ -219,7 +233,7 @@ export const actions = {
                     );
             }
 
-            // Insert new records
+            // Persist the new attendance state in a single bulk insert.
             const recordsToInsert = studentIds.map((studentId: string) => ({
                 personId: studentId,
                 session: sessionRecord.id,

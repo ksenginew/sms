@@ -2,6 +2,7 @@ import { and, eq } from 'drizzle-orm';
 import { error, fail, redirect } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { classPerson, classes, people } from '$lib/server/db/schema';
+import { createRoleContext } from '$lib/server/role-context';
 
 function readValue(formData: FormData, key: string) {
 	const value = formData.get(key)?.toString().trim();
@@ -17,6 +18,7 @@ function internalActionError(action: string) {
 }
 
 async function requirePerson(locals: App.Locals) {
+	// This route requires a fully linked authenticated user context.
 	if (!locals.session || !locals.user || !locals.person) {
 		throw error(401, 'Unauthorized');
 	}
@@ -24,28 +26,12 @@ async function requirePerson(locals: App.Locals) {
 	return locals.person;
 }
 
-async function canAccessClass(personId: string, classId: string) {
-	const memberRow = await db
-		.select({ id: classPerson.id })
-		.from(classPerson)
-		.where(and(eq(classPerson.personId, personId), eq(classPerson.classId, classId)))
-		.limit(1)
-		.get();
-
-	return Boolean(memberRow);
-}
-
-async function canManageClass(person: App.Locals['person'], classId: string) {
-	if (!person) return false;
-	if (person.role === 'admin') return true;
-	if (person.role !== 'teacher') return false;
-	return canAccessClass(person.id, classId);
-}
-
 export const load = async ({ locals, params, url }) => {
 	const person = await requirePerson(locals);
-	const isAdmin = person.role === 'admin';
-	const canManageMembers = person.role === 'admin' || person.role === 'teacher';
+	// Build role capability object once and reuse for all policy checks.
+	const roleContext = createRoleContext(person);
+	const isAdmin = roleContext.canManageClassCatalog();
+	const canManageMembers = roleContext.canManageClassMembers();
 
 	const classId = params.classId;
 	const classItem = await db.select().from(classes).where(eq(classes.id, classId)).limit(1).get();
@@ -54,11 +40,10 @@ export const load = async ({ locals, params, url }) => {
 		throw error(404, 'Class not found');
 	}
 
-	if (!isAdmin && !classItem.visible) {
-		throw error(403, 'Forbidden');
-	}
+	// Membership and class access policy are now centralized in role-context.
+	const isMember = await roleContext.isMemberOfClass(db, classId);
 
-	if (!isAdmin && !(await canAccessClass(person.id, classId))) {
+	if (!roleContext.canViewClassDetail(classItem.visible, isMember)) {
 		throw error(403, 'Forbidden');
 	}
 
@@ -74,6 +59,7 @@ export const load = async ({ locals, params, url }) => {
 		.where(eq(classPerson.classId, classId));
 
 	const backParams = new URLSearchParams();
+	// Preserve list-page filters when user navigates back from class detail page.
 	const search = (url.searchParams.get('search') ?? '').trim();
 	const showHidden = url.searchParams.get('showHidden') === '1';
 	if (search) backParams.set('search', search);
@@ -91,7 +77,9 @@ export const load = async ({ locals, params, url }) => {
 export const actions = {
 	update: async ({ request, locals, params }) => {
 		const person = await requirePerson(locals);
-		if (person.role !== 'admin') throw error(403, 'Forbidden');
+		const roleContext = createRoleContext(person);
+		// Class metadata updates are restricted to class-catalog managers.
+		if (!roleContext.canManageClassCatalog()) throw error(403, 'Forbidden');
 
 		const classId = params.classId;
 		const formData = await request.formData();
@@ -118,7 +106,9 @@ export const actions = {
 	},
 	delete: async ({ locals, params }) => {
 		const person = await requirePerson(locals);
-		if (person.role !== 'admin') throw error(403, 'Forbidden');
+		const roleContext = createRoleContext(person);
+		// Class deletion is also restricted to class-catalog managers.
+		if (!roleContext.canManageClassCatalog()) throw error(403, 'Forbidden');
 
 		const classId = params.classId;
 
@@ -133,6 +123,7 @@ export const actions = {
 	},
 	addMember: async ({ request, locals, params }) => {
 		const person = await requirePerson(locals);
+		const roleContext = createRoleContext(person);
 		const classId = params.classId;
 		const formData = await request.formData();
 		const personId = readValue(formData, 'personId');
@@ -141,7 +132,8 @@ export const actions = {
 			return actionError('addMember', 'Person is required.');
 		}
 
-		if (!(await canManageClass(person, classId))) {
+		// Teachers may manage only their own classes; admins can manage all.
+		if (!(await roleContext.canManageMembersForClass(db, classId))) {
 			throw error(403, 'Forbidden');
 		}
 
@@ -157,6 +149,7 @@ export const actions = {
 				return actionError('addMember', 'Person ID not found.');
 			}
 
+			// Skip insert when membership already exists.
 			const existing = await db
 				.select({ id: classPerson.id })
 				.from(classPerson)
@@ -179,6 +172,7 @@ export const actions = {
 	},
 	removeMember: async ({ request, locals, params }) => {
 		const person = await requirePerson(locals);
+		const roleContext = createRoleContext(person);
 		const classId = params.classId;
 		const formData = await request.formData();
 		const personId = readValue(formData, 'personId');
@@ -187,7 +181,7 @@ export const actions = {
 			return actionError('removeMember', 'Person is required.');
 		}
 
-		if (!(await canManageClass(person, classId))) {
+		if (!(await roleContext.canManageMembersForClass(db, classId))) {
 			throw error(403, 'Forbidden');
 		}
 

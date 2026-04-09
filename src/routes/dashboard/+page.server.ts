@@ -1,6 +1,7 @@
 import { error } from '@sveltejs/kit';
 import { and, desc, eq, gte, inArray, lte, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
+import { createRoleContext } from '$lib/server/role-context';
 import {
     attendance,
     attendanceSessions,
@@ -18,6 +19,7 @@ function toDateInput(value: Date) {
 type AttendanceStatus = 'present' | 'absent' | 'late' | 'excused';
 
 function summarizeByStatus(rows: Array<{ status: AttendanceStatus }>) {
+	// Create a deterministic summary object used by all overview cards.
     const summary = {
         total: rows.length,
         present: 0,
@@ -49,6 +51,8 @@ export const load = async (event) => {
     const today = toDateInput(now);
     const yearStart = `${now.getFullYear()}-01-01`;
 
+    // Common payload every role receives.
+    // Role-specific sections are merged on top of this base.
     const base = {
         nowIso: now.toISOString(),
         person,
@@ -62,7 +66,11 @@ export const load = async (event) => {
         };
     }
 
-    if (person.role === 'student') {
+    // Convert raw role string to a role object so route logic can be driven by capabilities.
+    const roleContext = createRoleContext(person);
+
+    // Student overview: current-year personal attendance summary.
+    if (roleContext.isStudent()) {
         const currentYearRows = await db
             .select({
                 date: attendanceSessions.date,
@@ -81,7 +89,7 @@ export const load = async (event) => {
 
         return {
             ...base,
-            role: 'student' as const,
+            role: roleContext.role,
             studentOverview: {
                 attendanceRows: currentYearRows,
                 attendanceSummary: summarizeByStatus(currentYearRows),
@@ -94,7 +102,8 @@ export const load = async (event) => {
         };
     }
 
-    if (person.role === 'teacher') {
+    // Teacher overview: classes taught + latest marked attendance per class.
+    if (roleContext.isTeacher()) {
         const teacherClasses = await db
             .select({
                 id: classes.id,
@@ -122,6 +131,7 @@ export const load = async (event) => {
             };
         }>;
 
+        // Build one attendance card per class with latest-session summary.
         for (const classItem of teacherClasses) {
             const lastSession = await db
                 .select({
@@ -196,7 +206,7 @@ export const load = async (event) => {
 
         return {
             ...base,
-            role: 'teacher' as const,
+            role: roleContext.role,
             teacherOverview: {
                 attendanceCards: classAttendanceCards,
                 classesQuickLinks: teacherClasses.slice(0, 6).map((item) => ({
@@ -211,7 +221,8 @@ export const load = async (event) => {
         };
     }
 
-    if (person.role === 'admin') {
+    // Admin overview: system-wide quick metrics and latest attendance day snapshot.
+    if (roleContext.isAdmin()) {
         const todaySession = await db
             .select({
                 sessionId: attendanceSessions.id,
@@ -245,6 +256,7 @@ export const load = async (event) => {
                 .where(eq(attendance.session, activeSession.sessionId))
             : [];
 
+        // Fetch aggregate counters in parallel for dashboard quick-access cards.
         const [classesTotal, peopleTotal, examsTotal] = await Promise.all([
             db.select({ count: sql<number>`count(*)` }).from(classes).get(),
             db.select({ count: sql<number>`count(*)` }).from(people).get(),
@@ -253,7 +265,7 @@ export const load = async (event) => {
 
         return {
             ...base,
-            role: 'admin' as const,
+            role: roleContext.role,
             adminOverview: {
                 attendanceDay: activeSession?.date ?? null,
                 attendanceSummary: summarizeByStatus(dayRows),

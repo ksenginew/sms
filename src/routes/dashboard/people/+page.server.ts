@@ -2,6 +2,7 @@ import { error, fail, redirect } from '@sveltejs/kit';
 import { desc, eq, like, or, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { ROLES, people } from '$lib/server/db/schema';
+import { createRoleContext } from '$lib/server/role-context';
 
 // This page is intentionally organized as a small service object.
 // The route handlers at the bottom stay thin, while the service owns
@@ -49,7 +50,10 @@ class PeoplePageService {
     // Centralized authorization check.
     // Every operation in this page is restricted to admins, so the rule lives in one place.
     private assertAdmin(locals: { person?: { role?: string } | null }) {
-        if (locals.person?.role !== 'admin') {
+        // Role checks are delegated to the shared inherited role context.
+        // This avoids hard-coding string comparisons in each route.
+        const roleContext = createRoleContext(locals.person as App.Locals['person']);
+        if (!roleContext.canManagePeople()) {
             throw error(403, 'Forbidden');
         }
     }
