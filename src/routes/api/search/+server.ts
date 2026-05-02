@@ -3,13 +3,13 @@ import { and, desc, eq, like, or, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { classPerson, classes, exam_class, exams, people } from '$lib/server/db/schema';
 
-function readIntParam(value: string | null, fallback: number) {
+export function readIntParam(value: string | null, fallback: number) {
     if (!value) return fallback;
     const parsed = Number.parseInt(value, 10);
     return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-function toSafeFtsQuery(raw: string) {
+export function toSafeFtsQuery(raw: string) {
     return raw
         .trim()
         .split(/\s+/)

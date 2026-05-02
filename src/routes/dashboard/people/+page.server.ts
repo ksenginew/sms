@@ -7,7 +7,7 @@ import { createRoleContext } from '$lib/server/role-context';
 // This page is intentionally organized as a small service object.
 // The route handlers at the bottom stay thin, while the service owns
 // the actual business logic for loading, creating, updating, and deleting people.
-class PeoplePageService {
+export class PeoplePageService {
     // The database dependency is injected so the class is easier to test
     // and so the route does not reach for the DB directly.
     constructor(private readonly database = db) {}
@@ -49,7 +49,7 @@ class PeoplePageService {
 
     // Centralized authorization check.
     // Every operation in this page is restricted to admins, so the rule lives in one place.
-    private assertAdmin(locals: { person?: { role?: string } | null }) {
+    private assertAdmin(locals: App.Locals) {
         // Role checks are delegated to the shared inherited role context.
         // This avoids hard-coding string comparisons in each route.
         const roleContext = createRoleContext(locals.person as App.Locals['person']);
@@ -60,7 +60,7 @@ class PeoplePageService {
 
     // Load the list page state: search term, pagination, and the optional record being edited.
     // This is the read-side flow for the page.
-    async load({ locals, url }) {
+    async load({ locals, url }: { locals: App.Locals; url: URL }) {
         this.assertAdmin(locals);
 
         // Normalize request filters before building the SQL query.
@@ -104,7 +104,7 @@ class PeoplePageService {
 
     // Create a new person record from the submitted form.
     // This is the write-side flow for the page.
-    async create({ request, locals }) {
+    async create({ request, locals }: { request: Request; locals: App.Locals }) {
         this.assertAdmin(locals);
 
         // Read the form once and validate the required role field before inserting anything.
@@ -139,7 +139,7 @@ class PeoplePageService {
 
     // Update an existing person record.
     // This follows the same input rules as create, but requires an id.
-    async update({ request, locals }) {
+    async update({ request, locals }: { request: Request; locals: App.Locals }) {
         this.assertAdmin(locals);
 
         const formData = await request.formData();
@@ -185,7 +185,7 @@ class PeoplePageService {
     // Delete a person record.
     // This action is intentionally small because the business rule is simple:
     // admin only, require an id, then remove the row.
-    async delete({ request, locals }) {
+    async delete({ request, locals }: { request: Request; locals: App.Locals }) {
         this.assertAdmin(locals);
 
         const formData = await request.formData();

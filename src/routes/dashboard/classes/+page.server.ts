@@ -4,20 +4,20 @@ import { db } from '$lib/server/db';
 import { classPerson, classes } from '$lib/server/db/schema';
 import { createRoleContext } from '$lib/server/role-context';
 
-function readValue(formData: FormData, key: string) {
+export function readValue(formData: FormData, key: string) {
 	const value = formData.get(key)?.toString().trim();
 	return value ? value : undefined;
 }
 
-function actionError(action: string, message: string, status = 400) {
+export function actionError(action: string, message: string, status = 400) {
 	return fail(status, { action, message });
 }
 
-function internalActionError(action: string) {
+export function internalActionError(action: string) {
 	return fail(500, { action, message: 'Server error. Please try again.' });
 }
 
-function readIntParam(value: string | null, fallback: number) {
+export function readIntParam(value: string | null, fallback: number) {
 	if (!value) return fallback;
 	const parsed = Number.parseInt(value, 10);
 	return Number.isFinite(parsed) ? parsed : fallback;
