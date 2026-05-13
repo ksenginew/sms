@@ -1,11 +1,11 @@
-<script>
+<script lang="ts">
 	import { Chart, registerables } from 'chart.js';
 	import { onMount } from 'svelte';
 
 	Chart.register(...registerables);
 
-	let chartContainer;
-	let chart = null;
+	let chartContainer: HTMLCanvasElement;
+	let chart: Chart<"doughnut", number[], unknown> | null = null;
 
 	let { attendanceRows = [] } = $props();
 
@@ -26,7 +26,7 @@
 			chart.destroy();
 		}
 
-		chart = new Chart(ctx, {
+		chart = new Chart(ctx!, {
 			type: 'doughnut',
 			data: {
 				datasets: [

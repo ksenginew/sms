@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
 	import AttendanceOverview from '$lib/components/AttendanceOverview.svelte';
 	import AttendanceBreakdown from '$lib/components/AttendanceBreakdown.svelte';
 
@@ -29,8 +29,7 @@
 		selectedLimit = String(data.limit ?? 25);
 	});
 
-	/** @param {number} nextOffset */
-	function studentListUrl(nextOffset) {
+	function studentListUrl(nextOffset: number) {
 		const params = new URLSearchParams();
 		params.set("period", data.selectedPeriod);
 
@@ -59,16 +58,14 @@
 		return `?${params.toString()}`;
 	}
 
-	/** @param {string} status */
-	function statusClass(status) {
+	function statusClass(status: string) {
 		if (status === "present") return "text-bg-success";
 		if (status === "late") return "text-bg-warning";
 		if (status === "absent") return "text-bg-danger";
 		return "text-bg-secondary";
 	}
 
-	/** @param {string} classId */
-	function classLink(classId) {
+	function classLink(classId: string) {
 		return `/dashboard/attendance/${classId}`;
 	}
 </script>

@@ -297,8 +297,6 @@
 				clearTimeout(searchDebounceTimer);
 			}
 			offcanvasEl?.removeEventListener("hidden.bs.offcanvas", onHidden as EventListener);
-			stopBeforeNavigate();
-			stopAfterNavigate();
 			forceResetSearchOffcanvas();
 			cleanupOffcanvasArtifacts();
 		};

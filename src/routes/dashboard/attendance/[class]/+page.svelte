@@ -156,7 +156,7 @@
 										class="position-sticky start-0 bg-body z-2 border-end text-start text-nowrap fw-semibold"
 									>{row.name}</td>
 									{#each data.sessions as col}
-										{@const status = data.attendance[row.id]?.[col.id]}
+										{@const status = data.attendance[row.personId]?.[col.id]}
 										<td class="text-nowrap">
 											{#if status}
 												<span

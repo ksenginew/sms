@@ -151,7 +151,7 @@
 					<div class="card shadow-sm rounded-3 border">
 						<div class="card-header border-bottom">Attendance overview (current year)</div>
 						<div class="card-body d-flex align-items-center justify-content-center" style="min-height:260px;">
-							<AttendanceOverview attendanceRows={data.studentOverview.attendanceRows} />
+							<AttendanceOverview attendanceRows={data.studentOverview!.attendanceRows} />
 						</div>
 					</div>
 
@@ -161,7 +161,7 @@
 							<div class="placeholder-glow mb-2">
 								<span class="placeholder col-8"></span>
 							</div>
-							<p class="text-body-secondary mb-0">{data.studentOverview.examPreview.message}</p>
+							<p class="text-body-secondary mb-0">{data.studentOverview!.examPreview.message}</p>
 						</div>
 					</div>
 				{/if}
@@ -176,10 +176,10 @@
 							</div>
 						</div>
 						<div class="card-body">
-							{#if data.teacherOverview.attendanceCards.length === 0}
+							{#if data.teacherOverview!.attendanceCards.length === 0}
 								<div class="alert alert-info mb-0">No accessible classes found.</div>
 							{:else}
-								{@const card = data.teacherOverview.attendanceCards[teacherCardIndex]}
+								{@const card = data.teacherOverview!.attendanceCards[teacherCardIndex]}
 								<div class="d-flex justify-content-center align-items-center" style="min-height:240px;">
 									<AttendanceBreakdown attendanceRows={rowsFromSummary(card.summary)} />
 								</div>
@@ -199,18 +199,18 @@
 						<div class="card-header border-bottom">School attendance overview</div>
 						<div class="card-body">
 							<div class="d-flex justify-content-center align-items-center" style="min-height:240px;">
-								<AttendanceBreakdown attendanceRows={rowsFromSummary(data.adminOverview.attendanceSummary)} />
+								<AttendanceBreakdown attendanceRows={rowsFromSummary(data.adminOverview!.attendanceSummary)} />
 							</div>
 							<div class="text-center">
-								<p class="fw-semibold mb-1">Present rate: {data.adminOverview.attendanceSummary.percentage}%</p>
-								{#if data.adminOverview.isOpenDay && data.adminOverview.attendanceSummary.notMarked > 0}
+								<p class="fw-semibold mb-1">Present rate: {data.adminOverview!.attendanceSummary.percentage}%</p>
+								{#if data.adminOverview!.isOpenDay && data.adminOverview!.attendanceSummary.notMarked > 0}
 									<p class="small text-warning mb-1">
-										{data.adminOverview.attendanceSummary.notMarked} student(s) not marked yet for today.
+										{data.adminOverview!.attendanceSummary.notMarked} student(s) not marked yet for today.
 									</p>
 								{/if}
 								<p class="small text-body-secondary mb-0">
-									{#if data.adminOverview.attendanceDay}
-										For day {data.adminOverview.attendanceDay}
+									{#if data.adminOverview!.attendanceDay}
+										For day {data.adminOverview!.attendanceDay}
 									{:else}
 										No attendance has been marked yet.
 									{/if}
@@ -229,10 +229,10 @@
 				<div class="card shadow-sm rounded-3 border h-100">
 					<div class="card-header border-bottom">Direct class links</div>
 					<div class="card-body d-grid gap-2">
-						{#if data.teacherOverview.classesQuickLinks.length === 0}
+						{#if data.teacherOverview!.classesQuickLinks.length === 0}
 							<p class="text-body-secondary mb-0">No classes assigned.</p>
 						{:else}
-							{#each data.teacherOverview.classesQuickLinks as item}
+							{#each data.teacherOverview!.classesQuickLinks as item}
 								<a class="btn btn-outline-secondary text-start" href={item.href}>{item.title}</a>
 							{/each}
 						{/if}
@@ -263,7 +263,7 @@
 					<div class="card-header border-bottom">Quick access</div>
 					<div class="card-body">
 						<div class="row g-2">
-							{#each data.adminOverview.quickAccess as item}
+							{#each data.adminOverview!.quickAccess as item}
 								<div class="col-6 col-md-3">
 									<a class="text-decoration-none" href={item.href}>
 										<div class="border rounded-3 p-3 h-100 bg-body-tertiary">
