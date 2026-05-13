@@ -39,6 +39,7 @@ function summarizeByStatus(rows: Array<{ status: AttendanceStatus }>) {
 
     return {
         ...summary,
+        notMarked: 0,
         percentage
     };
 }
@@ -257,6 +258,23 @@ export const load = async (event) => {
             : [];
 
         // Fetch aggregate counters in parallel for dashboard quick-access cards.
+        const studentsTotal = await db
+            .select({ count: sql<number>`count(*)` })
+            .from(people)
+            .where(eq(people.role, 'student'))
+            .get();
+
+        const isOpenDay = activeSession?.date === today;
+        const baseSummary = summarizeByStatus(dayRows);
+        const schoolStudentCount = Number(studentsTotal?.count ?? 0);
+        const notMarked = isOpenDay ? Math.max(schoolStudentCount - baseSummary.total, 0) : 0;
+        const effectiveTotal = baseSummary.total + notMarked;
+        const attendanceSummary = {
+            ...baseSummary,
+            total: effectiveTotal,
+            notMarked,
+            percentage: effectiveTotal > 0 ? Math.round((baseSummary.present / effectiveTotal) * 100) : 0
+        };
         const [classesTotal, peopleTotal, examsTotal] = await Promise.all([
             db.select({ count: sql<number>`count(*)` }).from(classes).get(),
             db.select({ count: sql<number>`count(*)` }).from(people).get(),
@@ -268,7 +286,8 @@ export const load = async (event) => {
             role: roleContext.role,
             adminOverview: {
                 attendanceDay: activeSession?.date ?? null,
-                attendanceSummary: summarizeByStatus(dayRows),
+                isOpenDay,
+                attendanceSummary,
                 quickAccess: [
                     {
                         title: 'Classes',

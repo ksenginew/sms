@@ -83,12 +83,14 @@
 		absent: number;
 		late: number;
 		excused: number;
-	}) {
+		notMarked?: number;
+	}): Array<{ status: "present" | "absent" | "late" | "excused" | "not_marked" }> {
 		return [
-			...Array.from({ length: summary.present }, () => ({ status: "present" })),
-			...Array.from({ length: summary.absent }, () => ({ status: "absent" })),
-			...Array.from({ length: summary.late }, () => ({ status: "late" })),
-			...Array.from({ length: summary.excused }, () => ({ status: "excused" }))
+			...Array.from({ length: summary.present }, () => ({ status: "present" as const })),
+			...Array.from({ length: summary.absent }, () => ({ status: "absent" as const })),
+			...Array.from({ length: summary.late }, () => ({ status: "late" as const })),
+			...Array.from({ length: summary.excused }, () => ({ status: "excused" as const })),
+			...Array.from({ length: summary.notMarked ?? 0 }, () => ({ status: "not_marked" as const }))
 		];
 	}
 </script>
@@ -201,6 +203,11 @@
 							</div>
 							<div class="text-center">
 								<p class="fw-semibold mb-1">Present rate: {data.adminOverview.attendanceSummary.percentage}%</p>
+								{#if data.adminOverview.isOpenDay && data.adminOverview.attendanceSummary.notMarked > 0}
+									<p class="small text-warning mb-1">
+										{data.adminOverview.attendanceSummary.notMarked} student(s) not marked yet for today.
+									</p>
+								{/if}
 								<p class="small text-body-secondary mb-0">
 									{#if data.adminOverview.attendanceDay}
 										For day {data.adminOverview.attendanceDay}
