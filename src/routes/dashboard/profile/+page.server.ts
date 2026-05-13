@@ -5,6 +5,9 @@ import { db } from '$lib/server/db';
 import { people, account } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
 import fs from 'fs/promises';
+// @ts-ignore
+import QRCode from 'qrcode';
+
 
 // Helper function to safely get string values from FormData
 function formDataGet(formData: FormData, key: string): string | undefined {
@@ -21,6 +24,7 @@ export const load: PageServerLoad = async (event) => {
     return {
         user,
         person: personRecord[0] || null,
+        qrcode: await QRCode.toDataURL(user.id),
 
         // Get linked accounts for the user
         accounts: (await auth.api.listUserAccounts({

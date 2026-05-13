@@ -8,6 +8,13 @@
 		return providerId.charAt(0).toUpperCase() + providerId.slice(1);
 	}
 
+	async function copyUserId() {
+		const userId = data.user?.id;
+		if (!userId) return;
+
+		await navigator.clipboard.writeText(userId);
+	}
+
 	function formatDate(value: unknown) {
 		if (!value) return "-";
 		const date = value instanceof Date ? value : new Date(String(value));
@@ -50,7 +57,31 @@
 				<hr />
 				<dl class="row mb-0 text-start">
 					<dt class="col-5">User ID</dt>
-					<dd class="col-7 text-break">{data.user?.id}</dd>
+					<dd class="col-7">
+						<div class="d-flex flex-column align-items-start gap-2">
+							<button
+								type="button"
+								class="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1"
+								onclick={copyUserId}
+								disabled={!data.user?.id}
+								title="Copy user ID"
+								aria-label="Copy user ID"
+							>
+								<svg
+									width="14"
+									height="14"
+									viewBox="0 0 16 16"
+									fill="currentColor"
+									aria-hidden="true"
+									focusable="false"
+								>
+									<path d="M10 1.5a1 1 0 0 1 1 1V3h1.5a1 1 0 0 1 1 1v8.5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V11h-.5a1 1 0 0 1-1-1V2.5a1 1 0 0 1 1-1H10Zm0 1H4.5v7.5H10V2.5Zm2.5 1H11v6.5a1 1 0 0 1-1 1H5V12h7.5V3.5Z" />
+								</svg>
+								<span>Copy</span>
+							</button>
+							<img src={data.qrcode} alt="QR Code" class="d-block rounded-3 border bg-white p-2" width="120" height="120" />
+						</div>
+					</dd>
 					<dt class="col-5">Joined</dt>
 					<dd class="col-7">{formatDate(data.user?.createdAt)}</dd>
 					<dt class="col-5">Linked</dt>
