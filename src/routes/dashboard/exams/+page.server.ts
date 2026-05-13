@@ -2,6 +2,7 @@ import { error } from '@sveltejs/kit';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { exams, people } from '$lib/server/db/schema';
+import { createRoleContext } from '$lib/server/role-context';
 
 function readIntParam(value: string | null, fallback: number) {
 	if (!value) return fallback;
@@ -22,7 +23,9 @@ export const load = async ({ locals, url }) => {
 		throw error(401, 'Unauthorized');
 	}
 
-	const isAdmin = person.role === 'admin';
+	const roleContext = createRoleContext(person);
+	// Admins can see all exams. Other roles only see visible exams.
+	const isAdmin = roleContext.canManageClassCatalog();
 	const search = (url.searchParams.get('search') ?? '').trim();
 	const limit = Math.max(1, Math.min(100, readIntParam(url.searchParams.get('limit'), 20)));
 	const offset = Math.max(0, readIntParam(url.searchParams.get('offset'), 0));
@@ -33,19 +36,23 @@ export const load = async ({ locals, url }) => {
 
 	const filters = [];
 	if (!isAdmin) {
+		// Enforce exam visibility for non-admin roles.
 		filters.push(eq(exams.visible, true));
 	}
 	if (searchCondition) {
+		// Add FTS match condition only when user provided a search term.
 		filters.push(searchCondition);
 	}
 
 	const whereClause = filters.length > 0 ? and(...filters) : undefined;
 
 	const examsList = whereClause
+		// Reuse same where clause for data query.
 		? await db.select().from(exams).where(whereClause).orderBy(desc(exams.createdAt)).limit(limit).offset(offset)
 		: await db.select().from(exams).orderBy(desc(exams.createdAt)).limit(limit).offset(offset);
 
 	const totalResult = whereClause
+		// Count query mirrors list query so pagination stays accurate.
 		? await db.select({ count: sql<number>`count(*)` }).from(exams).where(whereClause).get()
 		: await db.select({ count: sql<number>`count(*)` }).from(exams).get();
 

@@ -2,6 +2,7 @@ import { and, desc, eq, sql } from 'drizzle-orm';
 import { error, fail, redirect } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { classPerson, classes } from '$lib/server/db/schema';
+import { createRoleContext } from '$lib/server/role-context';
 
 function readValue(formData: FormData, key: string) {
 	const value = formData.get(key)?.toString().trim();
@@ -24,7 +25,10 @@ function readIntParam(value: string | null, fallback: number) {
 
 export const load = async ({ locals, url }) => {
 	if (!locals.person) return error(401, 'Unauthorized');
-	const isAdmin = locals.person.role === 'admin';
+	// Build a role object so the route asks for capabilities instead of checking
+	// raw role strings in multiple places.
+	const roleContext = createRoleContext(locals.person);
+	const isAdmin = roleContext.canManageClassCatalog();
 
 	const search = (url.searchParams.get('search') ?? '').trim();
 	const limit = Math.max(1, Math.min(100, readIntParam(url.searchParams.get('limit'), 20)));
@@ -44,6 +48,7 @@ export const load = async ({ locals, url }) => {
 	}> = [];
 
 	if (isAdmin) {
+		// Admin view can see all classes. Search is optional.
 		const filters = [];
 		if (searchCondition) filters.push(searchCondition);
 
@@ -54,6 +59,7 @@ export const load = async ({ locals, url }) => {
 			? await db.select().from(classes).where(whereClause).orderBy(desc(classes.updatedAt)).limit(limit).offset(offset)
 			: await db.select().from(classes).orderBy(desc(classes.updatedAt)).limit(limit).offset(offset);
 	} else {
+		// Non-admin users only see classes they are assigned to and that are visible.
 		const filters = [eq(classPerson.personId, locals.person.id)];
 		filters.push(eq(classes.visible, true));
 		if (searchCondition) filters.push(searchCondition);
@@ -76,6 +82,7 @@ export const load = async ({ locals, url }) => {
 	}
 
 	const totalResult = isAdmin
+		// Count query mirrors the same visibility/search rules used for row fetch.
 		? await db
 				.select({ count: sql<number>`count(*)` })
 				.from(classes)
@@ -114,7 +121,9 @@ export const load = async ({ locals, url }) => {
 
 export const actions = {
 	create: async ({ request, locals }) => {
-		if (locals.person!.role !== 'admin') throw error(403, 'Forbidden');
+		// Only class-catalog managers (currently admin) may create classes.
+		const roleContext = createRoleContext(locals.person);
+		if (!roleContext.canManageClassCatalog()) throw error(403, 'Forbidden');
 
 		const formData = await request.formData();
 		const title = readValue(formData, 'title');
@@ -124,11 +133,12 @@ export const actions = {
 		}
 
 		try {
+			// Keep the write payload minimal and rely on DB defaults for timestamps.
 			await db.insert(classes).values({
 				title,
 				description: readValue(formData, 'description'),
 				visible: formData.get('visible') === 'on',
-				updatedBy: locals.person!.id
+				updatedBy: locals.user!.id
 			});
 		} catch {
 			return internalActionError('create');

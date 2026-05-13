@@ -113,7 +113,8 @@ export const GET = async ({ locals, url }) => {
                 .orderBy(desc(people.createdAt))
                 .limit(perTypeLimit)
             : [];
-    } catch {
+    } catch (e) {
+        console.log(e);
         // Fallback for malformed/unsupported FTS syntax inputs.
         classRows = role === 'admin'
             ? await db

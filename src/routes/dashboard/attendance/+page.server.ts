@@ -1,16 +1,37 @@
 import { error } from '@sveltejs/kit';
 import { and, desc, eq, gte, inArray, like, lte, or, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
+import { createRoleContext } from '$lib/server/role-context';
 import {
     ATTENDANCE_STATUSES,
     attendance,
     attendanceSessions,
     classes,
     classPerson,
-    people
+    people,
+    type Person
 } from '$lib/server/db/schema';
 
 type PeriodKey = 'this-week' | 'this-month' | 'last-month' | 'this-year' | 'custom';
+type StudentStatus = (typeof ATTENDANCE_STATUSES)[number];
+type ClassSearchCondition = ReturnType<typeof or>;
+
+type ClassRow = {
+    id: string;
+    title: string;
+    description: string | null;
+    tags: string[] | null;
+    visible: boolean;
+    createdAt: Date;
+    updatedAt: Date;
+    updatedBy: string | null;
+};
+
+type StudentAttendanceRow = {
+    personId: string;
+    status: StudentStatus;
+    date: string;
+};
 
 const PERIODS: PeriodKey[] = ['this-week', 'this-month', 'last-month', 'this-year', 'custom'];
 
@@ -33,6 +54,7 @@ function readIntParam(value: string | null, fallback: number) {
 }
 
 function getPeriodRange(period: PeriodKey, fromInput: string | null, toInput: string | null) {
+	// Compute server-side date range once so all downstream queries stay aligned.
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
@@ -89,6 +111,171 @@ function getPeriodRange(period: PeriodKey, fromInput: string | null, toInput: st
     };
 }
 
+// Shared input for student-only attendance table operations.
+// Admins and teachers do not currently use these table rows in this page,
+// but we keep one shape for polymorphic method signatures.
+type StudentAttendanceQueryInput = {
+    dateRange: ReturnType<typeof getPeriodRange>;
+    tableSearch: string;
+    statusFilter: string;
+    limit: number;
+    offset: number;
+};
+
+type StudentAttendanceQueryResult = {
+    baseRows: StudentAttendanceRow[];
+    totalRows: number;
+    boundedOffset: number;
+    tableRows: StudentAttendanceRow[];
+};
+
+// Base abstraction for role-based attendance behavior.
+// Each subclass decides what class list and attendance data the role can access.
+abstract class AttendanceRoleContext {
+    constructor(
+        protected readonly database: typeof db,
+        protected readonly person: Person
+    ) {}
+
+    // Role-specific class visibility rule.
+    abstract getClasses(classSearchCondition: ClassSearchCondition): Promise<ClassRow[]>;
+
+    // Default behavior for non-student roles: no student attendance table data.
+    // Student role overrides this with actual queries.
+    async getStudentAttendanceData(_input: StudentAttendanceQueryInput): Promise<StudentAttendanceQueryResult> {
+        return {
+            baseRows: [],
+            totalRows: 0,
+            boundedOffset: 0,
+            tableRows: []
+        };
+    }
+}
+
+// Admins can view all classes, optionally filtered by the search predicate.
+class AdminAttendanceContext extends AttendanceRoleContext {
+    async getClasses(classSearchCondition: ClassSearchCondition): Promise<ClassRow[]> {
+        return classSearchCondition
+            ? await this.database.select().from(classes).where(classSearchCondition).orderBy(desc(classes.createdAt))
+            : await this.database.select().from(classes).orderBy(desc(classes.createdAt));
+    }
+}
+
+// Teachers can only view classes they belong to, and the search predicate
+// is combined with that membership constraint.
+class TeacherAttendanceContext extends AttendanceRoleContext {
+    async getClasses(classSearchCondition: ClassSearchCondition): Promise<ClassRow[]> {
+        return await this.database
+            .select({
+                id: classes.id,
+                title: classes.title,
+                description: classes.description,
+                tags: classes.tags,
+                visible: classes.visible,
+                createdAt: classes.createdAt,
+                updatedAt: classes.updatedAt,
+                updatedBy: classes.updatedBy
+            })
+            .from(classes)
+            .innerJoin(classPerson, eq(classes.id, classPerson.classId))
+            .where(
+                classSearchCondition
+                    ? and(eq(classPerson.personId, this.person.id), classSearchCondition)
+                    : eq(classPerson.personId, this.person.id)
+            )
+            .orderBy(desc(classes.createdAt));
+    }
+}
+
+// Students do not get class-management lists on this page, but they do get
+// attendance summary and table rows scoped to their own person id.
+class StudentAttendanceContext extends AttendanceRoleContext {
+    async getClasses(_classSearchCondition: ClassSearchCondition): Promise<ClassRow[]> {
+        return [];
+    }
+
+    async getStudentAttendanceData(input: StudentAttendanceQueryInput): Promise<StudentAttendanceQueryResult> {
+        const { dateRange, tableSearch, statusFilter, limit, offset } = input;
+
+        const baseRows = await this.database
+            .select({
+                personId: attendance.personId,
+                status: attendance.status,
+                date: attendanceSessions.date
+            })
+            .from(attendance)
+            .innerJoin(attendanceSessions, eq(attendanceSessions.id, attendance.session))
+            .where(
+                and(
+                    eq(attendance.personId, this.person.id),
+                    gte(attendanceSessions.date, dateRange.from),
+                    lte(attendanceSessions.date, dateRange.to)
+                )
+            )
+            .orderBy(desc(attendanceSessions.date));
+
+        // This where clause is reused by both count query and paginated data query.
+        const studentAttendanceWhere = and(
+            eq(attendance.personId, this.person.id),
+            gte(attendanceSessions.date, dateRange.from),
+            lte(attendanceSessions.date, dateRange.to),
+            tableSearch
+                ? or(
+                    like(attendanceSessions.date, `%${tableSearch}%`),
+                    like(attendance.status, `%${tableSearch}%`)
+                )
+                : undefined,
+            statusFilter ? eq(attendance.status, statusFilter as StudentStatus) : undefined
+        );
+
+        const totalRow = await this.database
+            .select({
+                count: sql<number>`count(*)`
+            })
+            .from(attendance)
+            .innerJoin(attendanceSessions, eq(attendanceSessions.id, attendance.session))
+            .where(studentAttendanceWhere)
+            .limit(1)
+            .get();
+
+        const totalRows = Number(totalRow?.count ?? 0);
+        const boundedOffset = totalRows > 0 ? Math.min(offset, Math.max(0, totalRows - 1)) : 0;
+
+        const tableRows = await this.database
+            .select({
+                personId: attendance.personId,
+                status: attendance.status,
+                date: attendanceSessions.date
+            })
+            .from(attendance)
+            .innerJoin(attendanceSessions, eq(attendanceSessions.id, attendance.session))
+            .where(studentAttendanceWhere)
+            .orderBy(desc(attendanceSessions.date))
+            .limit(limit)
+            .offset(boundedOffset);
+
+        return {
+            baseRows,
+            totalRows,
+            boundedOffset,
+            tableRows
+        };
+    }
+}
+
+// Factory function that turns a DB person record into a role-specific object.
+// This is where inheritance + polymorphism is applied: callers only use the
+// base class API, while behavior varies by concrete subclass.
+function createAttendanceRoleContext(person: Person, database: typeof db) {
+    // Role string parsing is centralized in shared role-context factory.
+    // This local factory only maps shared roles to attendance-specific subclasses.
+    const roleContext = createRoleContext(person);
+    if (roleContext.role === 'admin') return new AdminAttendanceContext(database, person);
+    if (roleContext.role === 'teacher') return new TeacherAttendanceContext(database, person);
+    if (roleContext.role === 'student') return new StudentAttendanceContext(database, person);
+    throw error(403, 'Forbidden');
+}
+
 export const load = async ({ locals, url }) => {
     if (!locals.session || !locals.user) {
         throw error(401, 'Unauthorized');
@@ -102,9 +289,9 @@ export const load = async ({ locals, url }) => {
         throw error(401, 'Unauthorized');
     }
 
-    if (person.role !== 'admin' && person.role !== 'teacher' && person.role !== 'student') {
-        throw error(403, 'Forbidden');
-    }
+    // Convert raw role string into a role context object.
+    // The route no longer branches with long role-specific condition chains.
+    const roleContext = createAttendanceRoleContext(person, db);
 
     const search = (url.searchParams.get('search') ?? '').trim();
 
@@ -116,33 +303,10 @@ export const load = async ({ locals, url }) => {
         )
         : undefined;
 
-    const classRows =
-        person.role === 'admin'
-            ? classSearchCondition
-                ? await db.select().from(classes).where(classSearchCondition).orderBy(desc(classes.createdAt))
-                : await db.select().from(classes).orderBy(desc(classes.createdAt))
-            : person.role === 'teacher'
-                ? await db
-                    .select({
-                        id: classes.id,
-                        title: classes.title,
-                        description: classes.description,
-                        tags: classes.tags,
-                        visible: classes.visible,
-                        createdAt: classes.createdAt,
-                        updatedAt: classes.updatedAt,
-                        updatedBy: classes.updatedBy
-                    })
-                    .from(classes)
-                    .innerJoin(classPerson, eq(classes.id, classPerson.classId))
-                    .where(
-                        classSearchCondition
-                            ? and(eq(classPerson.personId, person.id), classSearchCondition)
-                            : eq(classPerson.personId, person.id)
-                    )
-                    .orderBy(desc(classes.createdAt))
-                : [];
+    // Role-specific class fetching happens through polymorphism.
+    const classRows = await roleContext.getClasses(classSearchCondition);
 
+    // Precompute class member counts in one grouped query instead of per-class queries.
     const classMembershipCounts =
         classRows.length > 0
             ? await db
@@ -170,6 +334,7 @@ export const load = async ({ locals, url }) => {
     const toParam = url.searchParams.get('to');
     const dateRange = getPeriodRange(period, fromParam, toParam);
 
+    // Student table filters are independent from class-card search filters.
     const tableSearch = (url.searchParams.get('tableSearch') ?? '').trim();
     const requestedStatus = (url.searchParams.get('tableStatus') ?? '').trim();
     const statusFilter = ATTENDANCE_STATUSES.includes(requestedStatus as (typeof ATTENDANCE_STATUSES)[number])
@@ -180,72 +345,20 @@ export const load = async ({ locals, url }) => {
     const limit = limitOptions.includes(requestedLimit) ? requestedLimit : 25;
     const offset = Math.max(0, readIntParam(url.searchParams.get('tableOffset'), 0));
 
-    const studentBaseAttendanceRows =
-        person.role === 'student'
-            ? await db
-                .select({
-                    personId: attendance.personId,
-                    status: attendance.status,
-                    date: attendanceSessions.date
-                })
-                .from(attendance)
-                .innerJoin(attendanceSessions, eq(attendanceSessions.id, attendance.session))
-                .where(
-                    and(
-                        eq(attendance.personId, person.id),
-                        gte(attendanceSessions.date, dateRange.from),
-                        lte(attendanceSessions.date, dateRange.to)
-                    )
-                )
-                .orderBy(desc(attendanceSessions.date))
-            : [];
-
-    const studentAttendanceWhere = and(
-        eq(attendance.personId, person.id),
-        gte(attendanceSessions.date, dateRange.from),
-        lte(attendanceSessions.date, dateRange.to),
-        tableSearch
-            ? or(
-                like(attendanceSessions.date, `%${tableSearch}%`),
-                like(attendance.status, `%${tableSearch}%`)
-            )
-            : undefined,
-        statusFilter ? eq(attendance.status, statusFilter) : undefined
-    );
-
-    const studentAttendanceTotalRow =
-        person.role === 'student'
-            ? await db
-                .select({
-                    count: sql<number>`count(*)`
-                })
-                .from(attendance)
-                .innerJoin(attendanceSessions, eq(attendanceSessions.id, attendance.session))
-                .where(studentAttendanceWhere)
-                .limit(1)
-                .get()
-            : { count: 0 };
-
-    const totalRows = Number(studentAttendanceTotalRow?.count ?? 0);
-    const boundedOffset = totalRows > 0
-        ? Math.min(offset, Math.max(0, totalRows - 1))
-        : 0;
-
-    const studentTableRows =
-        person.role === 'student'
-            ? await db
-                .select({
-                    personId: attendance.personId,
-                    status: attendance.status,
-                    date: attendanceSessions.date
-                })
-                .from(attendance)
-                .innerJoin(attendanceSessions, eq(attendanceSessions.id, attendance.session))
-                .where(studentAttendanceWhere)
-                .orderBy(desc(attendanceSessions.date))
-                .limit(limit)
-                .offset(boundedOffset)
-            : [];
+    // Student attendance table data is also polymorphic.
+    // Non-student subclasses return empty results via the base implementation.
+    const {
+        baseRows: studentBaseAttendanceRows,
+        totalRows,
+        boundedOffset,
+        tableRows: studentTableRows
+    } = await roleContext.getStudentAttendanceData({
+        dateRange,
+        tableSearch,
+        statusFilter,
+        limit,
+        offset
+    });
 
     const hasPrevious = boundedOffset > 0;
     const hasNext = boundedOffset + studentTableRows.length < totalRows;
@@ -258,6 +371,7 @@ export const load = async ({ locals, url }) => {
         excused: studentBaseAttendanceRows.filter((row) => row.status === 'excused').length
     };
 
+    // Return both class-level cards and student-specific table state in one payload.
     return {
         person,
         role: person.role,
