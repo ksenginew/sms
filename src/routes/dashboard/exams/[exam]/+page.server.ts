@@ -90,12 +90,16 @@ export const load = async ({ locals, params }) => {
 
 	const isAdmin = person.role === 'admin';
 
+	// Load all subjects for paper creation
+	const allSubjects = await db.select().from(subjects).orderBy(desc(subjects.title));
+
 	return {
 		exam,
 		papers: examPapers,
 		allClasses,
 		grades,
 		selectedClassIds,
+		allSubjects,
 		isAdmin
 	};
 };
@@ -187,5 +191,58 @@ export const actions = {
 		}
 
 		throw redirect(303, '/dashboard/exams');
+	},
+
+	createPaper: async ({ request, locals, params }) => {
+		const roleContext = createRoleContext(locals.person ?? null);
+		if (!roleContext.canManageClassCatalog()) {
+			throw error(403, 'Forbidden');
+		}
+
+		const examId = Number.parseInt(params.exam, 10);
+		if (!Number.isFinite(examId)) {
+			return actionError('createPaper', 'Invalid exam ID');
+		}
+
+		const formData = await request.formData();
+		const title = readValue(formData, 'title');
+		const description = readValue(formData, 'description');
+		const subjectId = readValue(formData, 'subjectId');
+
+		if (!subjectId) {
+			return actionError('createPaper', 'Subject is required.');
+		}
+
+		try {
+			// Verify subject exists
+			const subjectExists = await db.select().from(subjects).where(eq(subjects.id, subjectId)).limit(1).get();
+			if (!subjectExists) {
+				return actionError('createPaper', 'Subject not found.');
+			}
+
+			// Check if paper already exists for this exam and subject
+			const existingPaper = await db
+				.select()
+				.from(papers)
+				.where(and(eq(papers.examId, examId), eq(papers.subjectId, subjectId)))
+				.limit(1)
+				.get();
+
+			if (existingPaper) {
+				return actionError('createPaper', 'A paper for this exam and subject already exists.');
+			}
+
+			// Create the paper
+			await db.insert(papers).values({
+				examId,
+				subjectId,
+				title: title || null,
+				description: description || null
+			});
+		} catch {
+			return internalActionError('createPaper');
+		}
+
+		throw redirect(303, `/dashboard/exams/${examId}`);
 	}
 };

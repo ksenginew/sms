@@ -49,6 +49,11 @@
 			href: "/dashboard/exams",
 			roles: ["admin", "teacher", "student"],
 		},
+		{
+			label: "Subjects",
+			href: "/dashboard/subjects",
+			roles: ["admin"],
+		},
 	];
 
 	function titleize(segment: string) {
