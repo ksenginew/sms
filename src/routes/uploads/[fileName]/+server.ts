@@ -18,7 +18,7 @@ export const GET: RequestHandler = async (event) => {
         const file = await open(filePath);
         const stream = file.readableWebStream();
 
-        return new Response(stream as BodyInit, {
+        return new Response(stream as unknown as BodyInit, {
             headers: {
                 'Content-Type': contentType,
                 'Content-Length': stats.size.toString(),

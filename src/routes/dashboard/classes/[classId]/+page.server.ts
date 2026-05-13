@@ -95,7 +95,7 @@ export const actions = {
 					description: readValue(formData, 'description'),
 					visible: formData.get('visible') === 'on',
 					updatedAt: new Date(),
-					updatedBy: user.id
+					updatedBy: locals.user!.id
 				})
 				.where(eq(classes.id, classId));
 		} catch {

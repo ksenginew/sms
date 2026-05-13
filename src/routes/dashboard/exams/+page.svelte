@@ -1,18 +1,16 @@
-<script>
+<script lang="ts">
 	let { data, form } = $props();
 	let selectedGrade = $state('');
-	let formToSubmit = $state(null);
+	let formToSubmit: HTMLFormElement | null = $state(null);
 
-	/** @param {unknown} value */
-	function formatDate(value) {
+	function formatDate(value: unknown) {
 		if (!value) return "-";
 		const date = value instanceof Date ? value : new Date(String(value));
 		if (Number.isNaN(date.getTime())) return "-";
 		return date.toLocaleDateString();
 	}
 
-	/** @param {number} nextOffset */
-	function listUrl(nextOffset) {
+	function listUrl(nextOffset: number) {
 		const params = new URLSearchParams();
 		if (data.search) params.set("search", data.search);
 		params.set("limit", String(data.limit));
@@ -20,21 +18,18 @@
 		return `/dashboard/exams?${params.toString()}`;
 	}
 
-	/** @param {number} examId */
-	function examLink(examId) {
+	function examLink(examId: number) {
 		return `/dashboard/exams/${examId}`;
 	}
 
-	/** @param {string} grade */
-	function getClassesForGrade(grade) {
+	function getClassesForGrade(grade: string) {
 		if (!grade) return [];
 		return data.allClasses.filter((cls) => cls.tags && cls.tags.includes(grade));
 	}
 
-	/** @param {Event} event */
-	function handleFormSubmit(event) {
+	function handleFormSubmit(event: Event) {
 		event.preventDefault();
-		formToSubmit = event.target;
+		formToSubmit = event.target as HTMLFormElement;
 
 		import('bootstrap').then(({ Modal }) => {
 			const modalEl = document.getElementById('confirmCreateExamModal');
