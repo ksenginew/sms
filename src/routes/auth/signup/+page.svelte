@@ -42,6 +42,7 @@
 			message = "Account created successfully. Redirecting...";
 			await goto("/dashboard");
 		} catch (error) {
+			console.log(error);
 			messageTone = "danger";
 			message =
 				error instanceof Error

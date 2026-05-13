@@ -2,12 +2,17 @@ import { error } from '@sveltejs/kit';
 import { and, desc, eq, gte, inArray, lte } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { attendance, attendanceSessions, classes, classPerson, people } from '$lib/server/db/schema';
+import { createRoleContext } from '$lib/server/role-context';
 
 const toYearMonth = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 
 export const load = async ({ locals, params, url }) => {
     if (!locals.person)
         return error(401, 'Unauthorized');
+
+    // Convert the logged-in person to role capabilities.
+    // This route allows class attendance management only for eligible roles.
+    const roleContext = createRoleContext(locals.person);
 
     const classInfo = await db.select().from(classes).where(eq(classes.id, params.class)).limit(1).get();
     if (!classInfo)
@@ -24,9 +29,8 @@ export const load = async ({ locals, params, url }) => {
         .where(eq(classPerson.classId, classInfo.id))
         .orderBy(desc(people.createdAt));
 
-    const allowed =
-        locals.person.role === 'admin' ||
-        members.some((member) => member.id === locals.person!.id && member.role === 'teacher');
+    // Shared role policy: admin always allowed, teacher allowed only when assigned.
+    const allowed = roleContext.canManageAttendanceForClass(members);
 
     if (!allowed) {
         throw error(403, 'Forbidden');
@@ -35,6 +39,7 @@ export const load = async ({ locals, params, url }) => {
     const teachers = members.filter((member) => member.role === 'teacher');
     const students = members.filter((member) => member.role === 'student');
 
+    // Resolve selected month and adjacent month links for previous/next navigation.
     const monthBase = url.searchParams.has('month') ? new Date(url.searchParams.get('month')!) : new Date();
     const monthStart = `${monthBase.getFullYear()}-${String(monthBase.getMonth() + 1).padStart(2, '0')}-01`;
     const monthEnd = `${monthBase.getFullYear()}-${String(monthBase.getMonth() + 1).padStart(2, '0')}-31`;
@@ -51,6 +56,7 @@ export const load = async ({ locals, params, url }) => {
         )
         .orderBy(attendanceSessions.date);
 
+    // Pull all attendance marks for the visible month and current class students.
     const attendanceRows = sessionRows.length > 0 && students.length > 0
         ? await db
             .select({
@@ -68,6 +74,7 @@ export const load = async ({ locals, params, url }) => {
         : [];
 
     type AttendanceStatus = 'present' | 'absent' | 'late' | 'excused';
+    // Build a matrix keyed by personId then sessionId for O(1) cell lookup in UI.
     const tableData: Record<string, Record<number, AttendanceStatus>> = {}; // personId -> (sessionId -> status)
 
     for (const attendanceRecord of attendanceRows) {
