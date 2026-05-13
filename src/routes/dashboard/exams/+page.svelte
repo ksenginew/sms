@@ -1,5 +1,7 @@
 <script>
-	let { data } = $props();
+	let { data, form } = $props();
+	let selectedGrade = $state('');
+	let formToSubmit = $state(null);
 
 	/** @param {unknown} value */
 	function formatDate(value) {
@@ -22,10 +24,44 @@
 	function examLink(examId) {
 		return `/dashboard/exams/${examId}`;
 	}
+
+	/** @param {string} grade */
+	function getClassesForGrade(grade) {
+		if (!grade) return [];
+		return data.allClasses.filter((cls) => cls.tags && cls.tags.includes(grade));
+	}
+
+	/** @param {Event} event */
+	function handleFormSubmit(event) {
+		event.preventDefault();
+		formToSubmit = event.target;
+
+		import('bootstrap').then(({ Modal }) => {
+			const modalEl = document.getElementById('confirmCreateExamModal');
+			if (modalEl) {
+				const modal = new Modal(modalEl);
+				modal.show();
+			}
+		});
+	}
+
+	function confirmCreate() {
+		if (formToSubmit) {
+			formToSubmit.submit();
+		}
+	}
 </script>
 
-<div class="d-flex justify-content-between align-items-center mb-3">
+<div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-3">
 	<h2 class="mb-0">Exams</h2>
+	{#if data.isAdmin}
+		<button
+			class="btn btn-primary"
+			type="button"
+			data-bs-toggle="modal"
+			data-bs-target="#createExamModal">Create exam</button
+		>
+	{/if}
 </div>
 
 <form method="GET" class="row g-3 mb-4">
@@ -102,4 +138,137 @@
 			<div class="alert alert-info mb-0">No exams found.</div>
 		</div>
 	{/each}
+</div>
+
+{#if data.isAdmin}
+	<div
+		class="modal fade"
+		id="createExamModal"
+		tabindex="-1"
+		aria-labelledby="createExamModalLabel"
+		aria-hidden="true"
+	>
+		<div class="modal-dialog modal-lg modal-dialog-scrollable">
+			<div class="modal-content">
+				<form method="POST" action="?/create" onsubmit={handleFormSubmit}>
+					<div class="modal-header">
+						<h2 class="modal-title h5" id="createExamModalLabel">Create exam</h2>
+						<button
+							type="button"
+							class="btn-close"
+							data-bs-dismiss="modal"
+							aria-label="Close"
+						></button>
+					</div>
+					<div class="modal-body">
+						{#if form?.action === 'create' && form?.message}
+							<div class="alert alert-danger" role="alert">
+								{form.message}
+							</div>
+						{/if}
+						<div class="row g-3">
+							<div class="col-md-6">
+								<label class="form-label" for="title">Title</label>
+								<input class="form-control" id="title" name="title" required />
+							</div>
+							<div class="col-md-6">
+								<label class="form-label" for="tags">Tags</label>
+								<input
+									class="form-control"
+									id="tags"
+									name="tags"
+									placeholder="math, midterm, grade-10"
+								/>
+							</div>
+							<div class="col-12">
+								<label class="form-label" for="description">Description</label>
+								<textarea class="form-control" id="description" name="description" rows="4"></textarea>
+							</div>
+							<div class="col-12">
+								<div class="form-check">
+									<input class="form-check-input" id="visible" name="visible" type="checkbox" checked />
+									<label class="form-check-label" for="visible">Visible</label>
+								</div>
+							</div>
+							<div class="col-12">
+								<label class="form-label" for="gradeFilter">Filter classes by grade</label>
+								<select 
+									class="form-select" 
+									id="gradeFilter" 
+									bind:value={selectedGrade}
+								>
+									<option value="">-- All Grades --</option>
+									{#each data.grades as grade}
+										<option value={grade}>{grade}</option>
+									{/each}
+								</select>
+							</div>
+							{#if selectedGrade || data.allClasses.length > 0}
+								<div class="col-12">
+									<h6 class="mb-3">Select classes</h6>
+									<div class="row g-2">
+										{#each getClassesForGrade(selectedGrade) as classItem}
+											<div class="col-md-6">
+												<div class="form-check">
+													<input 
+														class="form-check-input" 
+														id="class-{classItem.id}" 
+														name="selectedClasses"
+														value={classItem.id}
+														type="checkbox" 
+													/>
+													<label class="form-check-label" for="class-{classItem.id}">
+														{classItem.title}
+													</label>
+												</div>
+											</div>
+										{:else}
+											<div class="col-12">
+												<div class="text-body-secondary small">
+													{selectedGrade ? `No classes found for ${selectedGrade}` : 'Select a grade to see classes'}
+												</div>
+											</div>
+										{/each}
+									</div>
+								</div>
+							{/if}
+						</div>
+					</div>
+					<div class="modal-footer">
+						<button class="btn btn-primary" type="submit">Create</button>
+					</div>
+				</form>
+			</div>
+		</div>
+	</div>
+{/if}
+
+<!-- Confirmation Modal -->
+<div
+	class="modal fade"
+	id="confirmCreateExamModal"
+	tabindex="-1"
+	aria-labelledby="confirmCreateExamModalLabel"
+	aria-hidden="true"
+>
+	<div class="modal-dialog modal-dialog-centered">
+		<div class="modal-content">
+			<div class="modal-header">
+				<h2 class="modal-title h6" id="confirmCreateExamModalLabel">Confirm Exam Creation</h2>
+				<button
+					type="button"
+					class="btn-close"
+					data-bs-dismiss="modal"
+					aria-label="Close"
+				></button>
+			</div>
+			<div class="modal-body">
+				Are you sure you want to create this exam? This action cannot be undone.
+			</div>
+			<div class="modal-footer">
+				<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+				<button type="button" class="btn btn-primary" onclick={confirmCreate}>Create Exam</button>
+			</div>
+		</div>
+	</div>
 </div>
