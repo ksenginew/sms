@@ -95,7 +95,7 @@ export const actions = {
 					description: readValue(formData, 'description'),
 					visible: formData.get('visible') === 'on',
 					updatedAt: new Date(),
-					updatedBy: person.id
+					updatedBy: user.id
 				})
 				.where(eq(classes.id, classId));
 		} catch {
@@ -161,7 +161,7 @@ export const actions = {
 				await db.insert(classPerson).values({
 					classId,
 					personId,
-					updatedBy: person.id
+					updatedBy: locals.user!.id
 				});
 			}
 		} catch {

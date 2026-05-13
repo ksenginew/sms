@@ -12,13 +12,13 @@ import {
     people
 } from '$lib/server/db/schema';
 
-export function toDateInput(value: Date) {
+function toDateInput(value: Date) {
     return value.toISOString().slice(0, 10);
 }
 
 type AttendanceStatus = 'present' | 'absent' | 'late' | 'excused';
 
-export function summarizeByStatus(rows: Array<{ status: AttendanceStatus }>) {
+function summarizeByStatus(rows: Array<{ status: AttendanceStatus }>) {
 	// Create a deterministic summary object used by all overview cards.
     const summary = {
         total: rows.length,

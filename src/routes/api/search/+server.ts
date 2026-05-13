@@ -3,13 +3,13 @@ import { and, desc, eq, like, or, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { classPerson, classes, exam_class, exams, people } from '$lib/server/db/schema';
 
-export function readIntParam(value: string | null, fallback: number) {
+function readIntParam(value: string | null, fallback: number) {
     if (!value) return fallback;
     const parsed = Number.parseInt(value, 10);
     return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-export function toSafeFtsQuery(raw: string) {
+function toSafeFtsQuery(raw: string) {
     return raw
         .trim()
         .split(/\s+/)
@@ -113,7 +113,8 @@ export const GET = async ({ locals, url }) => {
                 .orderBy(desc(people.createdAt))
                 .limit(perTypeLimit)
             : [];
-    } catch {
+    } catch (e) {
+        console.log(e);
         // Fallback for malformed/unsupported FTS syntax inputs.
         classRows = role === 'admin'
             ? await db

@@ -7,7 +7,7 @@ import { createRoleContext } from '$lib/server/role-context';
 // This page is intentionally organized as a small service object.
 // The route handlers at the bottom stay thin, while the service owns
 // the actual business logic for loading, creating, updating, and deleting people.
-export class PeoplePageService {
+class PeoplePageService {
     // The database dependency is injected so the class is easier to test
     // and so the route does not reach for the DB directly.
     constructor(private readonly database = db) {}
@@ -126,9 +126,10 @@ export class PeoplePageService {
                 address: this.readValue(formData, 'address'),
                 role: role as (typeof ROLES)[number],
                 userId: this.readValue(formData, 'userId'),
-                updatedBy: locals.person?.id
+                updatedBy: locals.user?.id
             });
         } catch (reason) {
+            console.log(reason);
             // Convert database-specific errors into a friendlier response for the form.
             return fail(500, { message: this.getDatabaseErrorMessage(reason) });
         }
@@ -169,11 +170,12 @@ export class PeoplePageService {
                     address: this.readValue(formData, 'address'),
                     role: role as (typeof ROLES)[number],
                     userId: this.readValue(formData, 'userId'),
-                    updatedBy: locals.person?.id,
+                    updatedBy: locals.user?.id,
                     updatedAt: new Date()
                 })
                 .where(eq(people.id, id));
         } catch (reason) {
+            console.log(reason);
             // Reuse the same error mapping so the UI behaves consistently.
             return fail(500, { message: this.getDatabaseErrorMessage(reason) });
         }
@@ -200,6 +202,7 @@ export class PeoplePageService {
             // The schema-level foreign key rules will handle dependent data safely.
             await this.database.delete(people).where(eq(people.id, id));
         } catch (reason) {
+            console.log(reason);
             return fail(500, { message: this.getDatabaseErrorMessage(reason) });
         }
 

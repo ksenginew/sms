@@ -4,7 +4,7 @@ import { db } from '$lib/server/db';
 import { attendance, attendanceSessions, classes, classPerson, people } from '$lib/server/db/schema';
 import { createRoleContext } from '$lib/server/role-context';
 
-export function formatDateLabel(value: string) {
+function formatDateLabel(value: string) {
 	// Render date consistently for the page header and breadcrumb context.
     const date = new Date(`${value}T00:00:00`);
     return new Intl.DateTimeFormat('en-GB', {
@@ -14,18 +14,18 @@ export function formatDateLabel(value: string) {
     }).format(date);
 }
 
-export function toDateInput(value: Date) {
+function toDateInput(value: Date) {
     return value.toISOString().slice(0, 10);
 }
 
-export function parseDateInput(value: string | null) {
+function parseDateInput(value: string | null) {
 	// Strict yyyy-mm-dd parsing to avoid locale-dependent Date parsing behavior.
     if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
     const parsed = new Date(`${value}T00:00:00`);
     return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-export function getDatabaseErrorMessage(error: any): string {
+function getDatabaseErrorMessage(error: any): string {
 	// Translate low-level DB constraint errors into form-friendly messages.
     const message = error?.message?.toLowerCase() ?? '';
     if (message.includes('foreign key')) {
@@ -247,6 +247,7 @@ export const actions = {
 
             return { success: true };
         } catch (err) {
+            console.log(err);
             return fail(500, { message: getDatabaseErrorMessage(err) });
         }
     }

@@ -164,6 +164,7 @@
 
 			globalSearchResults = payload.results ?? [];
 		} catch (reason) {
+			console.log(reason);
 			if (token !== activeSearchToken) {
 				return;
 			}

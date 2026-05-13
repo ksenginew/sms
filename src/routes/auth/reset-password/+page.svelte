@@ -32,6 +32,7 @@
 			messageTone = 'success';
 			message = 'If the email exists, a reset link has been sent.';
 		} catch (error) {
+			console.log(error);
 			messageTone = 'danger';
 			message = error instanceof Error ? error.message : 'Unable to request a password reset.';
 		} finally {
@@ -67,6 +68,7 @@
 			message = 'Password updated successfully. Redirecting to sign in...';
 			await goto('/auth/signin');
 		} catch (error) {
+			console.log(error);
 			messageTone = 'danger';
 			message = error instanceof Error ? error.message : 'Unable to reset your password.';
 		} finally {

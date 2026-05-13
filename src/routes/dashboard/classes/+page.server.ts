@@ -4,20 +4,20 @@ import { db } from '$lib/server/db';
 import { classPerson, classes } from '$lib/server/db/schema';
 import { createRoleContext } from '$lib/server/role-context';
 
-export function readValue(formData: FormData, key: string) {
+function readValue(formData: FormData, key: string) {
 	const value = formData.get(key)?.toString().trim();
 	return value ? value : undefined;
 }
 
-export function actionError(action: string, message: string, status = 400) {
+function actionError(action: string, message: string, status = 400) {
 	return fail(status, { action, message });
 }
 
-export function internalActionError(action: string) {
+function internalActionError(action: string) {
 	return fail(500, { action, message: 'Server error. Please try again.' });
 }
 
-export function readIntParam(value: string | null, fallback: number) {
+function readIntParam(value: string | null, fallback: number) {
 	if (!value) return fallback;
 	const parsed = Number.parseInt(value, 10);
 	return Number.isFinite(parsed) ? parsed : fallback;
@@ -138,7 +138,7 @@ export const actions = {
 				title,
 				description: readValue(formData, 'description'),
 				visible: formData.get('visible') === 'on',
-				updatedBy: locals.person!.id
+				updatedBy: locals.user!.id
 			});
 		} catch {
 			return internalActionError('create');

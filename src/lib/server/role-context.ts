@@ -4,13 +4,10 @@ import { classPerson } from '$lib/server/db/schema';
 
 type Database = typeof import('$lib/server/db').db;
 
-// Members can come from different queries and may expose either id or personId.
-// This shape lets the permission logic work with both result formats.
 type ClassMemberLike = {
-    id?: string | null;
-    personId?: string | null;
-    role?: string | null;
-};
+    personId: string;
+    role: "admin" | "teacher" | "student";
+}
 
 export type RoleKey = 'external' | 'admin' | 'teacher' | 'student';
 
@@ -100,8 +97,7 @@ export abstract class RoleContext {
     protected isTeacherMember(members: ClassMemberLike[]) {
         if (!this.person) return false;
         return members.some((member) => {
-            const memberId = member.personId ?? member.id ?? null;
-            return member.role === 'teacher' && memberId === this.person!.id;
+            return member.role === 'teacher' && member.personId === this.person!.id;
         });
     }
 }

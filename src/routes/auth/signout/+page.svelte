@@ -20,6 +20,7 @@
 
 			await goto('/auth/signin');
 		} catch (error) {
+			console.log(error);
 			message = error instanceof Error ? error.message : 'Unable to sign out.';
 		} finally {
 			loading = false;
