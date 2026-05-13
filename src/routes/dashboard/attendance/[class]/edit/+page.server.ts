@@ -3,6 +3,7 @@ import { eq, inArray, and } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { attendance, attendanceSessions, classes, classPerson, people } from '$lib/server/db/schema';
 import { createRoleContext } from '$lib/server/role-context';
+import type { Actions, PageServerLoad } from './$types';
 
 function formatDateLabel(value: string) {
 	// Render date consistently for the page header and breadcrumb context.
@@ -44,7 +45,7 @@ function getDatabaseErrorMessage(error: any): string {
     return 'Database error. Please try again.';
 }
 
-export const load = async ({ locals, params, url }) => {
+export const load: PageServerLoad = async ({ locals, params, url }) => {
     if (!locals.session || !locals.user) {
         throw error(401, 'Unauthorized');
     }
@@ -96,6 +97,11 @@ export const load = async ({ locals, params, url }) => {
 
     const selectedDate = parseDateInput(url.searchParams.get('date')) ?? new Date();
     const selectedDateInput = toDateInput(selectedDate);
+    const todayInput = toDateInput(new Date());
+
+    if (selectedDateInput > todayInput) {
+        throw error(403, 'Forbidden');
+    }
 
     // Attendance records are grouped by session id, so we resolve/create by date.
     const sessionRecord = await db
@@ -135,11 +141,12 @@ export const load = async ({ locals, params, url }) => {
         dateLabel: formatDateLabel(selectedDateInput),
         sheetRows,
         isNewRecord: existingAttendance.length === 0,
-        hasSession: Boolean(sessionRecord)
+        hasSession: Boolean(sessionRecord),
+        todayDate: todayInput
     };
 };
 
-export const actions = {
+export const actions: Actions = {
     default: async ({ request, locals, params }) => {
         if (!locals.session || !locals.user) {
             throw error(401, 'Unauthorized');
@@ -192,9 +199,14 @@ export const actions = {
         const sessionDate = formData.get('date')?.toString() ?? '';
         const studentIds = JSON.parse(formData.get('studentIds') as string) as string[];
         const statuses = JSON.parse(formData.get('statuses') as string) as Record<string, string>;
+        const todayInput = toDateInput(new Date());
 
         if (!/^\d{4}-\d{2}-\d{2}$/.test(sessionDate)) {
             return fail(400, { message: 'Invalid date selected.' });
+        }
+
+        if (sessionDate > todayInput) {
+            throw error(403, 'Forbidden');
         }
 
         try {
