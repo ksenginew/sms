@@ -188,7 +188,7 @@
           <div class="mt-auto d-flex justify-content-end">
             <a
               class="stretched-link text-decoration-none small fw-semibold"
-              href="/dashboard/exams/papers"
+              href={`/dashboard/exams/${data.exam.id}/${paper.id}`}
             >
               Open paper
             </a>
