@@ -20,7 +20,7 @@ export const load = async ({ locals, params, url }) => {
 
     const members = await db
         .select({
-            id: people.id,
+            personId: people.id,
             name: people.name,
             role: people.role
         })
@@ -67,7 +67,7 @@ export const load = async ({ locals, params, url }) => {
             .from(attendance)
             .where(
                 and(
-                    inArray(attendance.personId, students.map((student) => student.id)),
+                    inArray(attendance.personId, students.map((student) => student.personId)),
                     inArray(attendance.session, sessionRows.map((session) => session.id))
                 )
             )

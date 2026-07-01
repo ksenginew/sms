@@ -46,7 +46,7 @@
 		<tbody>
 			{#each data.members as member}
 				<tr>
-					<td>{member.fullname || member.name || '-'}</td>
+					<td>{member.name || '-'}</td>
 					<td>{member.email || '-'}</td>
 					<td>{member.role}</td>
 					{#if data.canManageMembers}

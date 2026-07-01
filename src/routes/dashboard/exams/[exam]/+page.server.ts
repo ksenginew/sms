@@ -1,7 +1,21 @@
-import { error } from '@sveltejs/kit';
-import { desc, eq } from 'drizzle-orm';
+import { error, fail, redirect } from '@sveltejs/kit';
+import { desc, eq, and } from 'drizzle-orm';
 import { db } from '$lib/server/db';
-import { exams, papers, people, subjects } from '$lib/server/db/schema';
+import { exams, papers, people, subjects, classes, exam_class } from '$lib/server/db/schema';
+import { createRoleContext } from '$lib/server/role-context';
+
+function readValue(formData: FormData, key: string) {
+	const value = formData.get(key)?.toString().trim();
+	return value ? value : undefined;
+}
+
+function actionError(action: string, message: string, status = 400) {
+	return fail(status, { action, message });
+}
+
+function internalActionError(action: string) {
+	return fail(500, { action, message: 'Server error. Please try again.' });
+}
 
 export const load = async ({ locals, params }) => {
 	if (!locals.session || !locals.user) {
@@ -49,8 +63,186 @@ export const load = async ({ locals, params }) => {
 		.where(eq(papers.examId, examId))
 		.orderBy(desc(papers.createdAt));
 
+	// Load all classes for edit form
+	const allClasses = await db.select().from(classes).orderBy(desc(classes.title));
+
+	// Extract unique grades from class tags
+	const gradesSet = new Set<string>();
+	allClasses.forEach((cls) => {
+		if (cls.tags && Array.isArray(cls.tags)) {
+			cls.tags.forEach((tag) => {
+				if (tag.startsWith('grade-')) {
+					gradesSet.add(tag);
+				}
+			});
+		}
+	});
+
+	const grades = Array.from(gradesSet).sort();
+
+	// Load currently selected classes for this exam
+	const selectedClassRows = await db
+		.select({ classId: exam_class.classId })
+		.from(exam_class)
+		.where(eq(exam_class.examId, examId));
+
+	const selectedClassIds = selectedClassRows.map((row) => row.classId);
+
+	const isAdmin = person.role === 'admin';
+
+	// Load all subjects for paper creation
+	const allSubjects = await db.select().from(subjects).orderBy(desc(subjects.title));
+
 	return {
 		exam,
-		papers: examPapers
+		papers: examPapers,
+		allClasses,
+		grades,
+		selectedClassIds,
+		allSubjects,
+		isAdmin
 	};
+};
+
+export const actions = {
+	edit: async ({ request, locals, params }) => {
+		const roleContext = createRoleContext(locals.person ?? null);
+		if (!roleContext.canManageClassCatalog()) {
+			throw error(403, 'Forbidden');
+		}
+
+		const examId = Number.parseInt(params.exam, 10);
+		if (!Number.isFinite(examId)) {
+			return actionError('edit', 'Invalid exam ID');
+		}
+
+		const formData = await request.formData();
+		const title = readValue(formData, 'title');
+
+		if (!title) {
+			return actionError('edit', 'Title is required.');
+		}
+
+		const rawTags = readValue(formData, 'tags');
+		const tags = rawTags
+			? rawTags
+				.split(',')
+				.map((tag) => tag.trim())
+				.filter(Boolean)
+			: undefined;
+
+		try {
+			// Update exam
+			await db
+				.update(exams)
+				.set({
+					title,
+					description: readValue(formData, 'description'),
+					tags,
+					visible: formData.get('visible') === 'on',
+					updatedBy: locals.user?.id ?? null
+				})
+				.where(eq(exams.id, examId));
+
+			// Delete existing exam-class relationships
+			await db.delete(exam_class).where(eq(exam_class.examId, examId));
+
+			// Insert new exam-class relationships
+			const selectedClassIds = formData
+				.getAll('selectedClasses')
+				.map((val) => val.toString())
+				.filter(Boolean);
+
+			if (selectedClassIds.length > 0) {
+				const classExamPairs = selectedClassIds.map((classId) => ({
+					examId,
+					classId,
+					updatedBy: locals.user?.id ?? null
+				}));
+
+				await db.insert(exam_class).values(classExamPairs);
+			}
+		} catch {
+			return internalActionError('edit');
+		}
+
+		throw redirect(303, `/dashboard/exams/${examId}`);
+	},
+
+	delete: async ({ request, locals, params }) => {
+		const roleContext = createRoleContext(locals.person ?? null);
+		if (!roleContext.canManageClassCatalog()) {
+			throw error(403, 'Forbidden');
+		}
+
+		const examId = Number.parseInt(params.exam, 10);
+		if (!Number.isFinite(examId)) {
+			return actionError('delete', 'Invalid exam ID');
+		}
+
+		try {
+			// Delete exam-class relationships (cascade will handle papers/scores)
+			await db.delete(exam_class).where(eq(exam_class.examId, examId));
+
+			// Delete exam
+			await db.delete(exams).where(eq(exams.id, examId));
+		} catch {
+			return internalActionError('delete');
+		}
+
+		throw redirect(303, '/dashboard/exams');
+	},
+
+	createPaper: async ({ request, locals, params }) => {
+		const roleContext = createRoleContext(locals.person ?? null);
+		if (!roleContext.canManageClassCatalog()) {
+			throw error(403, 'Forbidden');
+		}
+
+		const examId = Number.parseInt(params.exam, 10);
+		if (!Number.isFinite(examId)) {
+			return actionError('createPaper', 'Invalid exam ID');
+		}
+
+		const formData = await request.formData();
+		const title = readValue(formData, 'title');
+		const description = readValue(formData, 'description');
+		const subjectId = readValue(formData, 'subjectId');
+
+		if (!subjectId) {
+			return actionError('createPaper', 'Subject is required.');
+		}
+
+		try {
+			// Verify subject exists
+			const subjectExists = await db.select().from(subjects).where(eq(subjects.id, subjectId)).limit(1).get();
+			if (!subjectExists) {
+				return actionError('createPaper', 'Subject not found.');
+			}
+
+			// Check if paper already exists for this exam and subject
+			const existingPaper = await db
+				.select()
+				.from(papers)
+				.where(and(eq(papers.examId, examId), eq(papers.subjectId, subjectId)))
+				.limit(1)
+				.get();
+
+			if (existingPaper) {
+				return actionError('createPaper', 'A paper for this exam and subject already exists.');
+			}
+
+			// Create the paper
+			await db.insert(papers).values({
+				examId,
+				subjectId,
+				title: title || null,
+				description: description || null
+			});
+		} catch {
+			return internalActionError('createPaper');
+		}
+
+		throw redirect(303, `/dashboard/exams/${examId}`);
+	}
 };

@@ -59,7 +59,14 @@
 		<form method="GET" class="row g-3 align-items-end">
 			<div class="col-12 col-md-4 col-lg-3">
 				<label class="form-label" for="date">Date</label>
-				<input id="date" class="form-control" type="date" name="date" value={data.selectedDate} />
+				<input
+					id="date"
+					class="form-control"
+					type="date"
+					name="date"
+					value={data.selectedDate}
+					max={data.todayDate}
+				/>
 			</div>
 			<div class="col-12 col-md-8 col-lg-9 d-flex gap-2">
 				<button class="btn btn-primary" type="submit">Load date</button>

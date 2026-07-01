@@ -1,10 +1,23 @@
 <script lang="ts">
     import { onMount } from "svelte";
+    import { Html5QrcodeScanner } from "html5-qrcode";
 
     let { data, form } = $props();
     const roles = ["admin", "teacher", "student"];
+    const scannerConfig = {
+        fps: 10,
+        qrbox: { width: 220, height: 220 },
+    };
+    let createModalEl = $state<HTMLDivElement | null>(null);
     let editModalEl = $state<HTMLDivElement | null>(null);
+    let qrScannerModalEl = $state<HTMLDivElement | null>(null);
+    let createUserIdInput = $state<HTMLInputElement | null>(null);
+    let editUserIdInput = $state<HTMLInputElement | null>(null);
     let editModal: any = $state(null);
+    let qrScannerModal: any = $state(null);
+    let qrScanner: Html5QrcodeScanner | null = null;
+    let activeUserIdInput = $state<HTMLInputElement | null>(null);
+    let activeUserIdLabel = $state("user ID");
     let copiedId = $state("");
 
     function listUrl(nextOffset: number) {
@@ -20,23 +33,102 @@
         copiedId = id;
     }
 
-    onMount(async () => {
-        if (!editModalEl) return;
+    function setUserIdInput(input: HTMLInputElement | null, value: string) {
+        if (!input) return;
 
-        // @ts-ignore
-        const { default: Modal } = await import("bootstrap/js/dist/modal");
-        editModal = new Modal(editModalEl);
-        if (data.editingPerson) {
-            editModal.show();
+        input.value = value;
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+
+    function openQrScanner(input: HTMLInputElement | null, label: string) {
+        activeUserIdInput = input;
+        activeUserIdLabel = label;
+        qrScannerModal?.show();
+    }
+
+    async function stopScanner(
+        scanner: Html5QrcodeScanner | null,
+        setScanner: (scanner: Html5QrcodeScanner | null) => void,
+    ) {
+        if (!scanner) return;
+
+        try {
+            await scanner.clear();
+        } finally {
+            setScanner(null);
+        }
+    }
+
+    onMount(async () => {
+        const cleanup: Array<() => void> = [];
+
+        if (qrScannerModalEl) {
+            const onScannerShown = () => {
+                if (!activeUserIdInput) return;
+
+                const reader = document.getElementById("qr-scanner-reader");
+                if (!reader || reader.childElementCount) return;
+
+                const scanner = new Html5QrcodeScanner("qr-scanner-reader", scannerConfig, false);
+                qrScanner = scanner;
+
+                scanner.render(
+                    async (decodedText) => {
+                        setUserIdInput(activeUserIdInput, decodedText);
+
+                        try {
+                            await scanner.clear();
+                        } finally {
+                            qrScanner = null;
+                            qrScannerModal?.hide();
+                        }
+                    },
+                    () => {
+                        // Keep scanning until a QR code is decoded.
+                    },
+                );
+            };
+
+            const onScannerHidden = async () => {
+                await stopScanner(qrScanner, (scanner) => {
+                    qrScanner = scanner;
+                });
+                activeUserIdInput = null;
+            };
+
+            qrScannerModalEl.addEventListener("shown.bs.modal", onScannerShown);
+            qrScannerModalEl.addEventListener("hidden.bs.modal", onScannerHidden);
+            cleanup.push(() => {
+                qrScannerModalEl?.removeEventListener("shown.bs.modal", onScannerShown);
+                qrScannerModalEl?.removeEventListener("hidden.bs.modal", onScannerHidden);
+            });
+
+            // @ts-ignore
+            const { default: Modal } = await import("bootstrap/js/dist/modal");
+            qrScannerModal = new Modal(qrScannerModalEl);
         }
 
-        const onHidden = () => {
-            window.location.assign(listUrl(data.offset));
-        };
+        if (editModalEl) {
+            // @ts-ignore
+            const { default: Modal } = await import("bootstrap/js/dist/modal");
+            editModal = new Modal(editModalEl);
 
-        editModalEl.addEventListener("hidden.bs.modal", onHidden, {
-            once: true,
-        });
+            if (data.editingPerson) {
+                editModal.show();
+            }
+
+            const onHidden = () => {
+                window.location.assign(listUrl(data.offset));
+            };
+
+            editModalEl.addEventListener("hidden.bs.modal", onHidden, {
+                once: true,
+            });
+
+            cleanup.push(() => {
+                editModalEl?.removeEventListener("hidden.bs.modal", onHidden);
+            });
+        }
     });
 </script>
 
@@ -111,12 +203,11 @@
                 <th scope="col">Person ID</th>
                 <th scope="col">Name</th>
                 <th scope="col">Email</th>
-                <th scope="col">ID number</th>
+                <th scope="col">Index</th>
                 <th scope="col">Phone</th>
                 <th scope="col">Mobile</th>
                 <th scope="col">Address</th>
                 <th scope="col">Role</th>
-                <th scope="col">User ID</th>
                 <th scope="col">Actions</th>
             </tr>
         </thead>
@@ -139,7 +230,6 @@
                     <td>{person.mobilePhone ?? ""}</td>
                     <td>{person.address ?? ""}</td>
                     <td>{person.role}</td>
-                    <td class="text-break">{person.userId ?? ""}</td>
                     <td>
                         <div class="d-flex gap-2">
                             <a
@@ -184,6 +274,7 @@
     tabindex="-1"
     aria-labelledby="createPersonModalLabel"
     aria-hidden="true"
+    bind:this={createModalEl}
 >
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
@@ -275,11 +366,21 @@
                             <label class="form-label" for="userId"
                                 >User ID</label
                             >
-                            <input
-                                class="form-control"
-                                id="userId"
-                                name="userId"
-                            />
+                            <div class="d-flex flex-column gap-2">
+                                <input
+                                    class="form-control"
+                                    id="userId"
+                                    name="userId"
+                                    bind:this={createUserIdInput}
+                                />
+                                <button
+                                    class="btn btn-sm btn-outline-primary align-self-start"
+                                    type="button"
+                                    onclick={() => openQrScanner(createUserIdInput, "create person user ID")}
+                                >
+                                    Scan QR code
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -412,12 +513,22 @@
                             <label class="form-label" for="edit-userId"
                                 >User ID</label
                             >
-                            <input
-                                class="form-control"
-                                id="edit-userId"
-                                name="userId"
-                                value={data.editingPerson?.userId ?? ""}
-                            />
+                            <div class="d-flex flex-column gap-2">
+                                <input
+                                    class="form-control"
+                                    id="edit-userId"
+                                    name="userId"
+                                    value={data.editingPerson?.userId ?? ""}
+                                    bind:this={editUserIdInput}
+                                />
+                                <button
+                                    class="btn btn-sm btn-outline-primary align-self-start"
+                                    type="button"
+                                    onclick={() => openQrScanner(editUserIdInput, "edit person user ID")}
+                                >
+                                    Scan QR code
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -426,6 +537,42 @@
                     >
                 </div>
             </form>
+        </div>
+    </div>
+</div>
+
+<div
+    class="modal fade"
+    id="qrScannerModal"
+    tabindex="-1"
+    aria-labelledby="qrScannerModalLabel"
+    aria-hidden="true"
+    bind:this={qrScannerModalEl}
+>
+    <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <h2 class="modal-title h5 mb-0" id="qrScannerModalLabel">
+                        Scan QR code
+                    </h2>
+                    <div class="text-body-secondary small">
+                        Result will fill the {activeUserIdLabel} field.
+                    </div>
+                </div>
+                <button
+                    type="button"
+                    class="btn-close"
+                    data-bs-dismiss="modal"
+                    aria-label="Close"
+                ></button>
+            </div>
+            <div class="modal-body">
+                <div
+                    id="qr-scanner-reader"
+                    class="mx-auto w-100 border rounded-3 bg-body-tertiary p-2"
+                ></div>
+            </div>
         </div>
     </div>
 </div>

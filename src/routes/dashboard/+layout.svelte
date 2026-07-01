@@ -49,6 +49,11 @@
 			href: "/dashboard/exams",
 			roles: ["admin", "teacher", "student"],
 		},
+		{
+			label: "Subjects",
+			href: "/dashboard/subjects",
+			roles: ["admin"],
+		},
 	];
 
 	function titleize(segment: string) {
@@ -292,8 +297,6 @@
 				clearTimeout(searchDebounceTimer);
 			}
 			offcanvasEl?.removeEventListener("hidden.bs.offcanvas", onHidden as EventListener);
-			stopBeforeNavigate();
-			stopAfterNavigate();
 			forceResetSearchOffcanvas();
 			cleanupOffcanvasArtifacts();
 		};
