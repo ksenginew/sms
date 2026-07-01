@@ -103,7 +103,7 @@
 						<div class="col-6">
 							<div class="border rounded-3 p-3 h-100">
 								<div class="text-body-secondary small">Sat for exam</div>
-								<div class="h4 mb-0">{data.studentsWhoSat}</div>
+								<div class="h4 mb-0">{data.enteredMarks}</div>
 							</div>
 						</div>
 						<div class="col-6">
