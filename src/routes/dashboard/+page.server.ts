@@ -11,6 +11,8 @@ import {
     exams,
     people
 } from '$lib/server/db/schema';
+// @ts-ignore
+import QRCode from 'qrcode';
 
 function toDateInput(value: Date) {
     return value.toISOString().slice(0, 10);
@@ -19,7 +21,7 @@ function toDateInput(value: Date) {
 type AttendanceStatus = 'present' | 'absent' | 'late' | 'excused';
 
 function summarizeByStatus(rows: Array<{ status: AttendanceStatus }>) {
-	// Create a deterministic summary object used by all overview cards.
+    // Create a deterministic summary object used by all overview cards.
     const summary = {
         total: rows.length,
         present: 0,
@@ -58,8 +60,9 @@ export const load = async (event) => {
         nowIso: now.toISOString(),
         person,
         user,
+        qrcode: await QRCode.toDataURL(user.id),
     };
-    
+
     if (!person) {
         return {
             ...base,

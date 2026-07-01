@@ -54,7 +54,7 @@
 			day: "numeric",
 			hour: "2-digit",
 			minute: "2-digit",
-			second: "2-digit"
+			second: "2-digit",
 		});
 	}
 
@@ -84,13 +84,25 @@
 		late: number;
 		excused: number;
 		notMarked?: number;
-	}): Array<{ status: "present" | "absent" | "late" | "excused" | "not_marked" }> {
+	}): Array<{
+		status: "present" | "absent" | "late" | "excused" | "not_marked";
+	}> {
 		return [
-			...Array.from({ length: summary.present }, () => ({ status: "present" as const })),
-			...Array.from({ length: summary.absent }, () => ({ status: "absent" as const })),
-			...Array.from({ length: summary.late }, () => ({ status: "late" as const })),
-			...Array.from({ length: summary.excused }, () => ({ status: "excused" as const })),
-			...Array.from({ length: summary.notMarked ?? 0 }, () => ({ status: "not_marked" as const }))
+			...Array.from({ length: summary.present }, () => ({
+				status: "present" as const,
+			})),
+			...Array.from({ length: summary.absent }, () => ({
+				status: "absent" as const,
+			})),
+			...Array.from({ length: summary.late }, () => ({
+				status: "late" as const,
+			})),
+			...Array.from({ length: summary.excused }, () => ({
+				status: "excused" as const,
+			})),
+			...Array.from({ length: summary.notMarked ?? 0 }, () => ({
+				status: "not_marked" as const,
+			})),
 		];
 	}
 </script>
@@ -119,26 +131,41 @@
 							{/if}
 							<div>
 								<p class="fw-semibold mb-0">{data.user.name}</p>
-								<p class="text-body-secondary small mb-0 text-capitalize">{data.role}</p>
+								<p
+									class="text-body-secondary small mb-0 text-capitalize"
+								>
+									{data.role}
+								</p>
 							</div>
 						</div>
 						<h1 class="h5 mb-1">{greetingByHour(currentTime)}</h1>
-						<p class="mb-0 text-body-secondary">{formatDateTime(currentTime)}</p>
+						<p class="mb-0 text-body-secondary">
+							{formatDateTime(currentTime)}
+						</p>
 					</div>
 				</div>
 
 				<div class="card shadow-sm rounded-3 border">
 					<div class="card-body">
 						<div class="border rounded-3 bg-body-tertiary p-3 mb-3">
-							<p class="small text-body-secondary mb-1">User ID</p>
-							<p class="mb-0 fw-semibold text-break">{data.user.id}</p>
+							<p class="small text-body-secondary mb-1">
+								User ID
+							</p>
+							<p class="mb-0 fw-semibold text-break">
+								{data.user.id}
+							</p>
 						</div>
 
-						<div class="border rounded-3 bg-body-tertiary p-3 text-center">
-							<p class="small text-body-secondary mb-2">QR Placeholder</p>
-							<div class="border rounded-2 py-3 text-body-secondary">
-								QR preview will be added here later
-							</div>
+						<div
+							class="border rounded-3 bg-body-tertiary p-3 text-center"
+						>
+							<img
+								src={data.qrcode}
+								alt="QR Code"
+								class="d-block rounded-3 border bg-white p-2"
+								width="120"
+								height="120"
+							/>
 						</div>
 					</div>
 				</div>
@@ -149,44 +176,85 @@
 			<div class="vstack gap-3">
 				{#if data.role === "student"}
 					<div class="card shadow-sm rounded-3 border">
-						<div class="card-header border-bottom">Attendance overview (current year)</div>
-						<div class="card-body d-flex align-items-center justify-content-center" style="min-height:260px;">
-							<AttendanceOverview attendanceRows={data.studentOverview!.attendanceRows} />
+						<div class="card-header border-bottom">
+							Attendance overview (current year)
+						</div>
+						<div
+							class="card-body d-flex align-items-center justify-content-center"
+							style="min-height:260px;"
+						>
+							<AttendanceOverview
+								attendanceRows={data.studentOverview!
+									.attendanceRows}
+							/>
 						</div>
 					</div>
 
 					<div class="card shadow-sm rounded-3 border">
-						<div class="card-header border-bottom">Exam result notifications</div>
-						<div class="card-body d-flex flex-column justify-content-center">
+						<div class="card-header border-bottom">
+							Exam result notifications
+						</div>
+						<div
+							class="card-body d-flex flex-column justify-content-center"
+						>
 							<div class="placeholder-glow mb-2">
 								<span class="placeholder col-8"></span>
 							</div>
-							<p class="text-body-secondary mb-0">{data.studentOverview!.examPreview.message}</p>
+							<p class="text-body-secondary mb-0">
+								{data.studentOverview!.examPreview.message}
+							</p>
 						</div>
 					</div>
 				{/if}
 
 				{#if data.role === "teacher"}
 					<div class="card shadow-sm rounded-3 border">
-						<div class="card-header border-bottom d-flex justify-content-between align-items-center">
+						<div
+							class="card-header border-bottom d-flex justify-content-between align-items-center"
+						>
 							<span>Attendance snapshot by class</span>
 							<div class="d-flex gap-2">
-								<button class="btn btn-sm btn-outline-secondary" type="button" onclick={previousTeacherCard}>Previous</button>
-								<button class="btn btn-sm btn-outline-secondary" type="button" onclick={nextTeacherCard}>Next</button>
+								<button
+									class="btn btn-sm btn-outline-secondary"
+									type="button"
+									onclick={previousTeacherCard}
+									>Previous</button
+								>
+								<button
+									class="btn btn-sm btn-outline-secondary"
+									type="button"
+									onclick={nextTeacherCard}>Next</button
+								>
 							</div>
 						</div>
 						<div class="card-body">
 							{#if data.teacherOverview!.attendanceCards.length === 0}
-								<div class="alert alert-info mb-0">No accessible classes found.</div>
+								<div class="alert alert-info mb-0">
+									No accessible classes found.
+								</div>
 							{:else}
-								{@const card = data.teacherOverview!.attendanceCards[teacherCardIndex]}
-								<div class="d-flex justify-content-center align-items-center" style="min-height:240px;">
-									<AttendanceBreakdown attendanceRows={rowsFromSummary(card.summary)} />
+								{@const card =
+									data.teacherOverview!.attendanceCards[
+										teacherCardIndex
+									]}
+								<div
+									class="d-flex justify-content-center align-items-center"
+									style="min-height:240px;"
+								>
+									<AttendanceBreakdown
+										attendanceRows={rowsFromSummary(
+											card.summary,
+										)}
+									/>
 								</div>
 								<div class="text-center">
-									<p class="fw-semibold mb-1">{card.classTitle}</p>
+									<p class="fw-semibold mb-1">
+										{card.classTitle}
+									</p>
 									<p class="small text-body-secondary mb-0">
-										{card.lastMarkedDate ? `Last marked day: ${card.lastMarkedDate}` : "No attendance marked yet"}
+										{card.lastMarkedDate
+											? `Last marked day: ${card.lastMarkedDate}`
+											: "No attendance marked yet"}
 									</p>
 								</div>
 							{/if}
@@ -196,21 +264,36 @@
 
 				{#if data.role === "admin"}
 					<div class="card shadow-sm rounded-3 border">
-						<div class="card-header border-bottom">School attendance overview</div>
+						<div class="card-header border-bottom">
+							School attendance overview
+						</div>
 						<div class="card-body">
-							<div class="d-flex justify-content-center align-items-center" style="min-height:240px;">
-								<AttendanceBreakdown attendanceRows={rowsFromSummary(data.adminOverview!.attendanceSummary)} />
+							<div
+								class="d-flex justify-content-center align-items-center"
+								style="min-height:240px;"
+							>
+								<AttendanceBreakdown
+									attendanceRows={rowsFromSummary(
+										data.adminOverview!.attendanceSummary,
+									)}
+								/>
 							</div>
 							<div class="text-center">
-								<p class="fw-semibold mb-1">Present rate: {data.adminOverview!.attendanceSummary.percentage}%</p>
+								<p class="fw-semibold mb-1">
+									Present rate: {data.adminOverview!
+										.attendanceSummary.percentage}%
+								</p>
 								{#if data.adminOverview!.isOpenDay && data.adminOverview!.attendanceSummary.notMarked > 0}
 									<p class="small text-warning mb-1">
-										{data.adminOverview!.attendanceSummary.notMarked} student(s) not marked yet for today.
+										{data.adminOverview!.attendanceSummary
+											.notMarked} student(s) not marked yet
+										for today.
 									</p>
 								{/if}
 								<p class="small text-body-secondary mb-0">
 									{#if data.adminOverview!.attendanceDay}
-										For day {data.adminOverview!.attendanceDay}
+										For day {data.adminOverview!
+											.attendanceDay}
 									{:else}
 										No attendance has been marked yet.
 									{/if}
@@ -227,13 +310,20 @@
 		<div class="row g-3">
 			<div class="col-12 col-lg-6">
 				<div class="card shadow-sm rounded-3 border h-100">
-					<div class="card-header border-bottom">Direct class links</div>
+					<div class="card-header border-bottom">
+						Direct class links
+					</div>
 					<div class="card-body d-grid gap-2">
 						{#if data.teacherOverview!.classesQuickLinks.length === 0}
-							<p class="text-body-secondary mb-0">No classes assigned.</p>
+							<p class="text-body-secondary mb-0">
+								No classes assigned.
+							</p>
 						{:else}
 							{#each data.teacherOverview!.classesQuickLinks as item}
-								<a class="btn btn-outline-secondary text-start" href={item.href}>{item.title}</a>
+								<a
+									class="btn btn-outline-secondary text-start"
+									href={item.href}>{item.title}</a
+								>
 							{/each}
 						{/if}
 					</div>
@@ -241,7 +331,9 @@
 			</div>
 			<div class="col-12 col-lg-6">
 				<div class="card shadow-sm rounded-3 border h-100">
-					<div class="card-header border-bottom">Direct exam links</div>
+					<div class="card-header border-bottom">
+						Direct exam links
+					</div>
 					<div class="card-body d-grid gap-2">
 						<!-- {#if data.teacherOverview.examsQuickLinks.length === 0}
 							<p class="text-body-secondary mb-0">No exams linked yet.</p>
@@ -265,10 +357,21 @@
 						<div class="row g-2">
 							{#each data.adminOverview!.quickAccess as item}
 								<div class="col-6 col-md-3">
-									<a class="text-decoration-none" href={item.href}>
-										<div class="border rounded-3 p-3 h-100 bg-body-tertiary">
-											<p class="fw-semibold mb-1">{item.title}</p>
-											<p class="small text-body-secondary mb-0">{item.subtitle}</p>
+									<a
+										class="text-decoration-none"
+										href={item.href}
+									>
+										<div
+											class="border rounded-3 p-3 h-100 bg-body-tertiary"
+										>
+											<p class="fw-semibold mb-1">
+												{item.title}
+											</p>
+											<p
+												class="small text-body-secondary mb-0"
+											>
+												{item.subtitle}
+											</p>
 										</div>
 									</a>
 								</div>

@@ -39,7 +39,7 @@ export async function handle({ event, resolve }) {
     event.locals.user = session.user;
     event.locals.person = await db.select().from(people).where(eq(people.userId, session.user.id)).limit(1).get()
   }
-  
+
   // If the user is not authenticated and trying to access a protected route, redirect them to the sign-in page.
   else if (event.url.pathname === "/auth/signout" || event.url.pathname.startsWith("/dashboard")) {
     return redirect(302, "/auth/signin");
