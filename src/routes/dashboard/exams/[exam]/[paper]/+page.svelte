@@ -64,21 +64,21 @@
 
 							<div class="mb-3">
 								<div class="d-flex justify-content-between align-items-center mb-2">
-									<div class="fw-semibold">Total average mark</div>
-									<div class="h4 mb-0">{formatScore(data.averageMark)}</div>
-								</div>
-								<div class="progress" style="height: 14px;">
-									<div
-										class="progress-bar"
-										role="progressbar"
-										style={`width: ${data.progressPercentage}%`}
-										aria-valuenow={data.progressPercentage}
-										aria-valuemin="0"
-										aria-valuemax="100"
-									>
-										{data.progressPercentage}%
+										<div class="fw-semibold">Total average mark</div>
+										<div class="h4 mb-0">{formatScore(data.insights?.averageMark ?? data.averageMark)}</div>
 									</div>
-								</div>
+									<div class="progress" style="height: 14px;">
+										<div
+											class="progress-bar"
+											role="progressbar"
+											style={`width: ${formatScore(data.insights?.averageMark ?? data.averageMark)}%`}
+											aria-valuenow={data.insights?.progressPercentage ?? data.progressPercentage}
+											aria-valuemin="0"
+											aria-valuemax="100"
+										>
+											{formatScore(data.insights?.averageMark ?? data.averageMark)}%
+										</div>
+									</div>
 								<div class="small text-body-secondary mt-2">Progress reflects the average mark out of 100.</div>
 							</div>
 
@@ -97,25 +97,25 @@
 						<div class="col-6">
 							<div class="border rounded-3 p-3 h-100">
 								<div class="text-body-secondary small">Total students</div>
-								<div class="h4 mb-0">{data.totalStudents}</div>
+								<div class="h4 mb-0">{data.insights?.totalStudents ?? data.totalStudents}</div>
 							</div>
 						</div>
 						<div class="col-6">
 							<div class="border rounded-3 p-3 h-100">
 								<div class="text-body-secondary small">Sat for exam</div>
-								<div class="h4 mb-0">{data.enteredMarks}</div>
+								<div class="h4 mb-0">{data.insights?.enteredMarks ?? data.enteredMarks}</div>
 							</div>
 						</div>
 						<div class="col-6">
 							<div class="border rounded-3 p-3 h-100">
 								<div class="text-body-secondary small">Absent</div>
-								<div class="h4 mb-0">{data.absentStudents}</div>
+								<div class="h4 mb-0">{data.insights?.absentStudents ?? data.absentStudents}</div>
 							</div>
 						</div>
 						<div class="col-6">
 							<div class="border rounded-3 p-3 h-100">
 								<div class="text-body-secondary small">Entered marks</div>
-								<div class="h4 mb-0">{data.enteredMarks}</div>
+								<div class="h4 mb-0">{data.insights?.enteredMarks ?? data.enteredMarks}</div>
 							</div>
 						</div>
 					</div>

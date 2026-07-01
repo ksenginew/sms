@@ -23,6 +23,7 @@ const {
 	attendanceSessions,
 	classPerson,
 	classes,
+	exam_class,
 	exams,
 	papers,
 	people,
@@ -93,6 +94,14 @@ type PaperSeed = {
 	description: string;
 	structure: string;
 	createdAt: Date;
+};
+
+type ExamClassSeed = {
+	examId: number;
+	classId: string;
+	createdAt: Date;
+	updatedAt: Date;
+	updatedBy: string | null;
 };
 
 type ScoreSeed = {
@@ -518,6 +527,22 @@ function createExamsAndPapers(classSeeds: ClassSeed[]) {
 	return { subjectRows, examsRows, papersRows, paperIdsByClassId };
 }
 
+function createExamClassAssignments(classSeeds: ClassSeed[]) {
+	const rows: ExamClassSeed[] = [];
+
+	for (const classSeed of classSeeds) {
+		rows.push({
+			examId: classSeed.grade,
+			classId: classSeed.id,
+			createdAt: SEED_TIMESTAMP,
+			updatedAt: SEED_TIMESTAMP,
+			updatedBy: null
+		});
+	}
+
+	return rows;
+}
+
 function createClassMembership(classSeeds: ClassSeed[]) {
 	const rows: Array<Record<string, unknown>> = [];
 	let id = 1;
@@ -789,6 +814,7 @@ async function main() {
 	const accountRows = createAuthAccounts(userRows);
 	const classSeeds = createClasses(teacherIds, studentIds);
 	const { subjectRows, examsRows, papersRows, paperIdsByClassId } = createExamsAndPapers(classSeeds);
+	const examClassRows = createExamClassAssignments(classSeeds);
 	const classMembershipRows = createClassMembership(classSeeds);
 	const { sessionRows, attendanceRows } = createAttendance(classSeeds);
 	const scoreRows = createScores(classSeeds, paperIdsByClassId, papersRows);
@@ -800,6 +826,7 @@ async function main() {
 		await tx.delete(session);
 		await tx.delete(account);
 		await tx.delete(scores);
+		await tx.delete(exam_class);
 		await tx.delete(papers);
 		await tx.delete(exams);
 		await tx.delete(attendance);
@@ -817,6 +844,7 @@ async function main() {
 		await insertBatches(tx, classPerson, classMembershipRows, 500);
 		await tx.insert(subjects).values(subjectRows);
 		await tx.insert(exams).values(examsRows);
+		await tx.insert(exam_class).values(examClassRows);
 		await tx.insert(papers).values(paperInsertionRows);
 		await insertBatches(tx, attendanceSessions, sessionRows, 500);
 		await insertBatches(tx, attendance, attendanceRows, 2000);
@@ -825,7 +853,7 @@ async function main() {
 
 	await rebuildFtsIndexes();
 
-	console.log(`Seeded ${peopleRows.length} people, ${userRows.length} auth users, ${accountRows.length} auth accounts, ${linkedPeopleCount} linked auth users, ${unlinkedPeopleCount} unlinked people with auth users, ${extraUserCount} extra auth users, ${classSeeds.length} classes, ${attendanceRows.length} attendance rows, and ${scoreRows.length} score rows.`);
+	console.log(`Seeded ${peopleRows.length} people, ${userRows.length} auth users, ${accountRows.length} auth accounts, ${linkedPeopleCount} linked auth users, ${unlinkedPeopleCount} unlinked people with auth users, ${extraUserCount} extra auth users, ${classSeeds.length} classes, ${examClassRows.length} exam-class links, ${attendanceRows.length} attendance rows, and ${scoreRows.length} score rows.`);
 }
 
 main().catch((error) => {

@@ -504,6 +504,61 @@ class PaperGradebookService {
 		return Number(row?.count ?? 0);
 	}
 
+	/**
+	 * Compute summarized insights for a paper using DB aggregates where possible.
+	 * Returns counts and averaged mark plus a progress percentage.
+	 */
+	async loadInsights(examId: number, paperId: number, classIds: string[]) {
+		// totalStudents: distinct student personIds in the classes linked to this exam
+		let totalStudents = 0;
+		if (classIds.length > 0) {
+			const totalRow = await this.db
+				.select({ count: sql<number>`count(DISTINCT ${classPerson.personId})` })
+				.from(classPerson)
+				.innerJoin(people, eq(people.id, classPerson.personId))
+				.where(and(inArray(classPerson.classId, classIds), eq(people.role, 'student')))
+				.get();
+			totalStudents = Number(totalRow?.count ?? 0);
+		}
+
+		// enteredMarks and averageMark (numeric values present)
+		const [enteredRow, avgRow] = await Promise.all([
+			this.db
+				.select({ count: sql<number>`count(*)` })
+				.from(scores)
+				.where(and(eq(scores.paperId, paperId), isNotNull(scores.numeric)))
+				.get(),
+			this.db
+				.select({ avg: sql<number>`avg(${scores.numeric})` })
+				.from(scores)
+				.where(and(eq(scores.paperId, paperId), isNotNull(scores.numeric)))
+				.get()
+		]);
+
+		const enteredMarks = Number(enteredRow?.count ?? 0);
+		const averageMark = Number(avgRow?.avg ?? 0);
+
+		// absentStudents via text='absent'
+		const absentRow = await this.db
+			.select({ count: sql<number>`count(*)` })
+			.from(scores)
+			.where(and(eq(scores.paperId, paperId), sql`lower(${scores.text}) = 'absent'`))
+			.get();
+		const absentStudents = Number(absentRow?.count ?? 0);
+
+		const marksRemaining = Math.max(0, totalStudents - enteredMarks - absentStudents);
+		const progressPercentage = clampPercentage(averageMark);
+
+		return {
+			totalStudents,
+			enteredMarks,
+			absentStudents,
+			marksRemaining,
+			averageMark,
+			progressPercentage
+		};
+	}
+
 	computeStats(
 		totalStudents: number,
 		scoreRows: Awaited<ReturnType<PaperGradebookService['loadScores']>>,
@@ -695,12 +750,26 @@ export const load = async ({ locals, params, url }: any) => {
 	const classIds = await service.loadClassIds(examId);
 	const students = await service.loadRoster(classIds);
 	const scoreRows = await service.loadScores(paperId);
-	const absentStudents = await service.loadAbsentCount(paperId);
 
-	const stats = service.computeStats(students.length, scoreRows, absentStudents);
+	// Compute aggregated insights on the backend and expose them as a single object.
+	const insights = await service.loadInsights(examId, paperId, classIds);
+
+	// Use the insights for summary values but still compute table rows and highest mark locally.
 	const allTableRows = service.buildTableRows(students, scoreRows);
 	const filteredRows = service.filterRows(allTableRows, search);
 	const page = service.paginate(filteredRows, limit, offset);
+
+	// Compute highest mark and corresponding student (if any)
+	let highestMarkValue: number | null = null;
+	let highestMarkName: string | null = null;
+	if (scoreRows.length > 0) {
+		const top = scoreRows.reduce((best, row) => {
+			const val = Number(row.numeric ?? -Infinity);
+			return val > (best.numeric ?? -Infinity) ? row : best;
+		}, scoreRows[0]);
+		highestMarkValue = top.numeric ?? null;
+		highestMarkName = top.name ?? null;
+	}
 
 	return {
 		exam,
@@ -709,7 +778,17 @@ export const load = async ({ locals, params, url }: any) => {
 		isAdmin: roleContext.isAdmin(),
 		students,
 		tableRows: page.pageRows,
-		...stats,
+		// Backward-compatible flattened props (sourced from insights)
+		totalStudents: insights.totalStudents,
+		enteredMarks: insights.enteredMarks,
+		absentStudents: insights.absentStudents,
+		marksRemaining: insights.marksRemaining,
+		averageMark: insights.averageMark,
+		progressPercentage: insights.progressPercentage,
+		highestMarkValue,
+		highestMarkName,
+		// also provide grouped insights object for front-end to consume
+		insights,
 		search,
 		limit,
 		offset,

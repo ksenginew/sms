@@ -35,6 +35,7 @@
 	<table class="table mb-0">
 		<thead>
 			<tr>
+				<th>ID</th>
 				<th>Name</th>
 				<th>Email</th>
 				<th>Role</th>
@@ -46,6 +47,7 @@
 		<tbody>
 			{#each data.members as member}
 				<tr>
+					<td>{member.id}</td>
 					<td>{member.name || '-'}</td>
 					<td>{member.email || '-'}</td>
 					<td>{member.role}</td>
