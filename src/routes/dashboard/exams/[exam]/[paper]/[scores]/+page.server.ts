@@ -25,11 +25,6 @@ type Member = {
 	name?: string | null;
 	idnumber: string | null;
 };
-
-
-
-
-
 class Mark {
 	private constructor(
 		public readonly numeric: number | null,
@@ -55,11 +50,6 @@ class Mark {
 		return new Mark(numeric, null);
 	}
 }
-
-
-
-
-
 class SubmittedRow {
 	readonly clientId: string;
 	readonly indexNumber?: string;
@@ -86,12 +76,6 @@ class SubmittedRow {
 		return `Row ${this.position + 1}: ${message}`;
 	}
 }
-
-
-
-
-
-
 class ExamPaperContext {
 	private constructor(
 		
@@ -159,8 +143,6 @@ class ExamPaperContext {
 	/** Throws 403 unless the current person is allowed to manage this class's marks. */
 	assertCanManage() {
 		if (this.roleContext.isAdmin()) return;
-		
-		
 		if (!this.roleContext.canManageAttendanceForClass(this.members)) {
 			throw error(403, 'Forbidden');
 		}
@@ -189,11 +171,6 @@ class ExamPaperContext {
 		return this.members.find((m) => m.personId === personId && m.role === 'student');
 	}
 }
-
-
-
-
-
 class ScoreRepository {
 	async upsert(paperId: number, personId: string, mark: Mark, updatedBy: string) {
 		await db
@@ -218,10 +195,6 @@ class ScoreRepository {
 			});
 	}
 }
-
-
-
-
 class MarksBatchResult {
 	readonly rowErrors: RowError[] = [];
 	readonly savedRowIds: string[] = [];
@@ -265,12 +238,6 @@ class MarksBatchResult {
 		};
 	}
 }
-
-
-
-
-
-
 class MarksEntryProcessor {
 	constructor(
 		private readonly context: ExamPaperContext,
@@ -336,8 +303,6 @@ class MarksEntryProcessor {
 		}
 	}
 }
-
-
 async function resolvePerson(locals: App.Locals) {
 	if (!locals.session || !locals.user) {
 		throw error(401, 'Unauthorized');
@@ -367,8 +332,6 @@ function assertCanEnterMarks(roleContext: RoleContext) {
 		throw error(403, 'Forbidden');
 	}
 }
-
-
 export const load: PageServerLoad = async ({ locals, params }) => {
 	const person = await resolvePerson(locals);
 	const roleContext = createRoleContext(person);
@@ -411,8 +374,6 @@ export const actions: Actions = {
 		const submittedRows = clientIds.map(
 			(clientId, index) => new SubmittedRow(clientId, indexNumbers[index], marks[index], index)
 		);
-
-		
 		const processor = new MarksEntryProcessor(context, new ScoreRepository(), locals.user!.id);
 		const result = await processor.process(submittedRows);
 
