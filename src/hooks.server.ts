@@ -5,8 +5,6 @@ import { db } from "$lib/server/db";
 import { eq } from "drizzle-orm";
 import { people } from "$lib/server/db/schema";
 import { redirect } from "@sveltejs/kit";
-
-
 // const devRoles = {
 //   "external": "external-user-0001",
 //   "admin": "auth-user-0001",

@@ -54,7 +54,6 @@ function readIntParam(value: string | null, fallback: number) {
 }
 
 function getPeriodRange(period: PeriodKey, fromInput: string | null, toInput: string | null) {
-	// Compute server-side date range once so all downstream queries stay aligned.
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
@@ -111,9 +110,6 @@ function getPeriodRange(period: PeriodKey, fromInput: string | null, toInput: st
     };
 }
 
-// Shared input for student-only attendance table operations.
-// Admins and teachers do not currently use these table rows in this page,
-// but we keep one shape for polymorphic method signatures.
 type StudentAttendanceQueryInput = {
     dateRange: ReturnType<typeof getPeriodRange>;
     tableSearch: string;
@@ -130,7 +126,6 @@ type StudentAttendanceQueryResult = {
 };
 
 // Base abstraction for role-based attendance behavior.
-// Each subclass decides what class list and attendance data the role can access.
 abstract class AttendanceRoleContext {
     constructor(
         protected readonly database: typeof db,
@@ -140,8 +135,6 @@ abstract class AttendanceRoleContext {
     // Role-specific class visibility rule.
     abstract getClasses(classSearchCondition: ClassSearchCondition): Promise<ClassRow[]>;
 
-    // Default behavior for non-student roles: no student attendance table data.
-    // Student role overrides this with actual queries.
     async getStudentAttendanceData(_input: StudentAttendanceQueryInput): Promise<StudentAttendanceQueryResult> {
         return {
             baseRows: [],
@@ -161,8 +154,7 @@ class AdminAttendanceContext extends AttendanceRoleContext {
     }
 }
 
-// Teachers can only view classes they belong to, and the search predicate
-// is combined with that membership constraint.
+// Teachers can only view classes they belong to.
 class TeacherAttendanceContext extends AttendanceRoleContext {
     async getClasses(classSearchCondition: ClassSearchCondition): Promise<ClassRow[]> {
         return await this.database
@@ -187,8 +179,6 @@ class TeacherAttendanceContext extends AttendanceRoleContext {
     }
 }
 
-// Students do not get class-management lists on this page, but they do get
-// attendance summary and table rows scoped to their own person id.
 class StudentAttendanceContext extends AttendanceRoleContext {
     async getClasses(_classSearchCondition: ClassSearchCondition): Promise<ClassRow[]> {
         return [];
@@ -263,12 +253,8 @@ class StudentAttendanceContext extends AttendanceRoleContext {
     }
 }
 
-// Factory function that turns a DB person record into a role-specific object.
-// This is where inheritance + polymorphism is applied: callers only use the
-// base class API, while behavior varies by concrete subclass.
 function createAttendanceRoleContext(person: Person, database: typeof db) {
     // Role string parsing is centralized in shared role-context factory.
-    // This local factory only maps shared roles to attendance-specific subclasses.
     const roleContext = createRoleContext(person);
     if (roleContext.role === 'admin') return new AdminAttendanceContext(database, person);
     if (roleContext.role === 'teacher') return new TeacherAttendanceContext(database, person);
@@ -290,7 +276,6 @@ export const load = async ({ locals, url }) => {
     }
 
     // Convert raw role string into a role context object.
-    // The route no longer branches with long role-specific condition chains.
     const roleContext = createAttendanceRoleContext(person, db);
 
     const search = (url.searchParams.get('search') ?? '').trim();
@@ -303,10 +288,8 @@ export const load = async ({ locals, url }) => {
         )
         : undefined;
 
-    // Role-specific class fetching happens through polymorphism.
     const classRows = await roleContext.getClasses(classSearchCondition);
 
-    // Precompute class member counts in one grouped query instead of per-class queries.
     const classMembershipCounts =
         classRows.length > 0
             ? await db
@@ -346,7 +329,6 @@ export const load = async ({ locals, url }) => {
     const offset = Math.max(0, readIntParam(url.searchParams.get('tableOffset'), 0));
 
     // Student attendance table data is also polymorphic.
-    // Non-student subclasses return empty results via the base implementation.
     const {
         baseRows: studentBaseAttendanceRows,
         totalRows,

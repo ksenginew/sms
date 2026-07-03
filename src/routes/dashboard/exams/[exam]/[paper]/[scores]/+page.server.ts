@@ -26,12 +26,10 @@ type Member = {
 	idnumber: string | null;
 };
 
-// ---------------------------------------------------------------------------
-// Value Object: Mark
-// Encapsulates the one piece of business logic that decides what a raw
-// string typed into the "Marks" column actually means (a number, "AB", or
-// invalid). Nothing outside this class needs to know the parsing rules.
-// ---------------------------------------------------------------------------
+
+
+
+
 class Mark {
 	private constructor(
 		public readonly numeric: number | null,
@@ -58,12 +56,10 @@ class Mark {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Value Object: SubmittedRow
-// Wraps one raw row of form data (clientId/indexNumber/mark) and knows how
-// to clean itself up and describe its own position-aware error messages.
-// The rest of the code never touches raw form strings directly.
-// ---------------------------------------------------------------------------
+
+
+
+
 class SubmittedRow {
 	readonly clientId: string;
 	readonly indexNumber?: string;
@@ -91,16 +87,14 @@ class SubmittedRow {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Entity: ExamPaperContext
-// Loads everything that both the `load` function and the `save` action need
-// (exam, paper, subject, class roster) and centralizes the class-level
-// permission check. This is the piece that removes the duplication that
-// existed between `load` and `actions.save` in the original file.
-// ---------------------------------------------------------------------------
+
+
+
+
+
 class ExamPaperContext {
 	private constructor(
-		// use looser `any` here to avoid tight coupling to generated types
+		
 		public readonly exam: any,
 		public readonly paper: any,
 		public readonly subject: { id: string; title: string },
@@ -165,8 +159,8 @@ class ExamPaperContext {
 	/** Throws 403 unless the current person is allowed to manage this class's marks. */
 	assertCanManage() {
 		if (this.roleContext.isAdmin()) return;
-		// `canManageAttendanceForClass` expects the class member list, not
-		// an array of role strings — pass the members array.
+		
+		
 		if (!this.roleContext.canManageAttendanceForClass(this.members)) {
 			throw error(403, 'Forbidden');
 		}
@@ -196,12 +190,10 @@ class ExamPaperContext {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Repository: ScoreRepository
-// The only class that knows how a score is persisted. If the storage
-// strategy ever changes (different table, soft deletes, audit log, etc.),
-// this is the single place to change it.
-// ---------------------------------------------------------------------------
+
+
+
+
 class ScoreRepository {
 	async upsert(paperId: number, personId: string, mark: Mark, updatedBy: string) {
 		await db
@@ -227,11 +219,9 @@ class ScoreRepository {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Aggregate: MarksBatchResult
-// Collects the outcome of processing a batch of rows and knows how to
-// summarize itself into the exact response shape the Svelte form expects.
-// ---------------------------------------------------------------------------
+
+
+
 class MarksBatchResult {
 	readonly rowErrors: RowError[] = [];
 	readonly savedRowIds: string[] = [];
@@ -276,13 +266,11 @@ class MarksBatchResult {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Service: MarksEntryProcessor
-// Orchestrates validation + persistence for a batch of submitted rows.
-// Depends on ExamPaperContext (for roster data) and ScoreRepository (for
-// persistence) rather than reaching into the database directly — composition
-// over inheritance, and each collaborator can be swapped or mocked in tests.
-// ---------------------------------------------------------------------------
+
+
+
+
+
 class MarksEntryProcessor {
 	constructor(
 		private readonly context: ExamPaperContext,
@@ -349,9 +337,7 @@ class MarksEntryProcessor {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Helpers (kept as plain functions — not everything needs to be a class)
-// ---------------------------------------------------------------------------
+
 async function resolvePerson(locals: App.Locals) {
 	if (!locals.session || !locals.user) {
 		throw error(401, 'Unauthorized');
@@ -382,9 +368,7 @@ function assertCanEnterMarks(roleContext: RoleContext) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// SvelteKit load + actions — now thin, readable, and free of duplication
-// ---------------------------------------------------------------------------
+
 export const load: PageServerLoad = async ({ locals, params }) => {
 	const person = await resolvePerson(locals);
 	const roleContext = createRoleContext(person);
@@ -428,7 +412,7 @@ export const actions: Actions = {
 			(clientId, index) => new SubmittedRow(clientId, indexNumbers[index], marks[index], index)
 		);
 
-		// `resolvePerson` guarantees `locals.user` exists; use non-null assertion
+		
 		const processor = new MarksEntryProcessor(context, new ScoreRepository(), locals.user!.id);
 		const result = await processor.process(submittedRows);
 

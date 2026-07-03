@@ -4,48 +4,28 @@ import { db } from '$lib/server/db';
 import { exams, people, classes, exam_class } from '$lib/server/db/schema';
 import { createRoleContext } from '$lib/server/role-context';
 
-/**
- * Service layer for exam listing and creation.
- * Encapsulates business logic, authorization, database queries, and form handling.
- * The route file stays thin and delegates all work to this service.
- */
 export class ExamsPageService {
 	constructor(private readonly database = db) {}
 
-	/**
-	 * Read a form or query parameter, trim whitespace, and normalize empty strings to undefined.
-	 */
 	private readValue(data: FormData | URLSearchParams, key: string): string | undefined {
 		const value = data.get(key)?.toString().trim();
 		return value ? value : undefined;
 	}
 
-	/**
-	 * Parse an integer query parameter with a fallback.
-	 */
 	private readIntParam(value: string | null, fallback: number): number {
 		if (!value) return fallback;
 		const parsed = Number.parseInt(value, 10);
 		return Number.isFinite(parsed) ? parsed : fallback;
 	}
 
-	/**
-	 * Centralized error response for action failures.
-	 */
 	private actionError(action: string, message: string, status = 400) {
 		return fail(status, { action, message });
 	}
 
-	/**
-	 * Centralized error response for unexpected server errors.
-	 */
 	private internalActionError(action: string) {
 		return fail(500, { action, message: 'Server error. Please try again.' });
 	}
 
-	/**
-	 * Authorization check: only admins can manage exams.
-	 */
 	private assertCanManageExams(person: App.Locals['person'] | null) {
 		const roleContext = createRoleContext(person);
 		if (!roleContext.canManageClassCatalog()) {
@@ -53,9 +33,6 @@ export class ExamsPageService {
 		}
 	}
 
-	/**
-	 * Load the exam list page: search, pagination, visibility filtering, and form dropdowns.
-	 */
 	async load({ locals, url }: { locals: App.Locals; url: URL }) {
 		// Authentication check
 		if (!locals.session || !locals.user) {
@@ -166,9 +143,6 @@ export class ExamsPageService {
 		};
 	}
 
-	/**
-	 * Create a new exam with optional class assignments.
-	 */
 	async create({ request, locals }: { request: Request; locals: App.Locals }) {
 		// Authorization check
 		this.assertCanManageExams(locals.person ?? null);

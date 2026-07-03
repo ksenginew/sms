@@ -88,8 +88,6 @@
 
 	<div class="col-12 col-xl-4">
 		<div class="d-grid gap-3">
-
-
 			<div class="card h-100">
 				<div class="card-body">
 					<h3 class="h5 mb-3">Insights</h3>

@@ -11,7 +11,6 @@ export const load = async ({ locals, params, url }) => {
         return error(401, 'Unauthorized');
 
     // Convert the logged-in person to role capabilities.
-    // This route allows class attendance management only for eligible roles.
     const roleContext = createRoleContext(locals.person);
 
     const classInfo = await db.select().from(classes).where(eq(classes.id, params.class)).limit(1).get();

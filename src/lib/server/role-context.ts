@@ -68,9 +68,6 @@ export abstract class RoleContext {
         return false;
     }
 
-    // Shared DB-backed membership check used by multiple routes.
-    // Keeping this in one place ensures all routes use the same definition of
-    // "member of class" and avoids subtle authorization drift.
     async isMemberOfClass(database: Database, classId: string) {
         if (!this.person) return false;
 
@@ -159,7 +156,7 @@ export class StudentRoleContext extends RoleContext {
     readonly role = 'student' as const;
 }
 
-// Factory entry point for all routes. This keeps role string checks in one place.
+// Factory entry point for all routes. 
 export function createRoleContext(person: Person | null | undefined): RoleContext {
     if (!person) return new ExternalRoleContext();
     if (person.role === 'admin') return new AdminRoleContext(person);

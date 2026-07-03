@@ -6,7 +6,7 @@ import { createRoleContext } from '$lib/server/role-context';
 import type { Actions, PageServerLoad } from './$types';
 
 function formatDateLabel(value: string) {
-	// Render date consistently for the page header and breadcrumb context.
+	// Render date consistently for the page header and breadcrumb.
     const date = new Date(`${value}T00:00:00`);
     return new Intl.DateTimeFormat('en-GB', {
         day: '2-digit',

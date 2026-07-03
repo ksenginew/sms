@@ -7,8 +7,6 @@ import { eq } from 'drizzle-orm';
 import fs from 'fs/promises';
 // @ts-ignore
 import QRCode from 'qrcode';
-
-
 // Helper function to safely get string values from FormData
 function formDataGet(formData: FormData, key: string): string | undefined {
     const value = formData.get(key);
