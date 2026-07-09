@@ -190,7 +190,7 @@
 						</div>
 					</div>
 
-					<div class="card shadow-sm rounded-3 border">
+					<!-- <div class="card shadow-sm rounded-3 border">
 						<div class="card-header border-bottom">
 							Exam result notifications
 						</div>
@@ -204,7 +204,7 @@
 								{data.studentOverview!.examPreview.message}
 							</p>
 						</div>
-					</div>
+					</div> -->
 				{/if}
 
 				{#if data.role === "teacher"}
